@@ -22,7 +22,7 @@ class MultyGratings(Stimulus, dj.Manual):
     temporal_freqs          : blob       # cycles/sec
     spatial_regions         : blob       # region of grating
     mask                    : blob       # mask to be applied
-    duration                : smallint   # grating duration
+    duration                : int        # grating duration
     """
 
     cond_tables = ['MultyGratings']
