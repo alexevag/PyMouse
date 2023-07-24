@@ -83,8 +83,15 @@ class Stimulus:
 
     def prepare(self, curr_cond=False, stim_period=''):
         """prepares stuff for presentation before trial starts"""
-        self.curr_cond = curr_cond if stim_period == '' else curr_cond[stim_period]
-        self.period = stim_period
+        self.flag_no_stim = False
+        if stim_period == '':
+            self.curr_cond = curr_cond
+        elif stim_period not in curr_cond:
+            self.flag_no_stim = True
+        else: 
+            self.curr_cond = curr_cond[stim_period]
+        
+        return self.flag_no_stim
 
     def start(self):
         """start stimulus"""
