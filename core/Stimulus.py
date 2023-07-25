@@ -90,7 +90,8 @@ class Stimulus:
             self.flag_no_stim = True
         else: 
             self.curr_cond = curr_cond[stim_period]
-        
+        # update stim period
+        self.period = stim_period
         return self.flag_no_stim
 
     def start(self):
