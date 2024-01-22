@@ -1,8 +1,12 @@
+import time
+from importlib import import_module
+
 import pygame
 import pygame_menu
-from Interfaces.RPPorts import *
 from pygame_menu.examples import create_example_window
-import time
+
+from Interfaces.RPPorts import *
+from core.Logger import experiment
 
 class Experiment:
     """ _summary_
@@ -36,7 +40,12 @@ class Experiment:
         """
         self.params = params
         self.logger = logger
-        self.interface = RPPorts(exp=self, callbacks=False)
+        interface_module = (
+            experiment.SetupConfiguration
+            & {"setup_conf_idx": self.params["setup_conf_idx"]}
+        ).fetch("interface")[0]
+        interface = getattr(import_module(f'Interfaces.{interface_module}'), interface_module)
+        self.interface = interface(exp=self, callbacks=False)
 
         pygame.init()
         self.surface = pygame.display.set_mode((800, 480))
