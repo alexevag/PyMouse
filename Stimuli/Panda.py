@@ -129,6 +129,7 @@ class Panda(Stimulus, dj.Manual):
             self.props.setSize(self.pipe.getDisplayWidth(), self.pipe.getDisplayHeight())
             self.props.setFullscreen(self.Fullscreen)
         else:
+            self.props.setOrigin(1921,0)
             self.props.setSize(self.monitor.resolution_x, self.monitor.resolution_y)
         self.props.setCursorHidden(True)
         self.props.setUndecorated(True)
