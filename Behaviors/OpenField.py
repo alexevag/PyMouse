@@ -4,10 +4,10 @@ import sys
 import time
 from multiprocessing.shared_memory import SharedMemory
 
-from cv2 import getAffineTransform, invertAffineTransform
 import datajoint as dj
 import numpy as np
 import yaml
+from cv2 import getAffineTransform, invertAffineTransform
 
 from core.Behavior import Behavior, behavior
 from Interfaces.camera import WebCam
