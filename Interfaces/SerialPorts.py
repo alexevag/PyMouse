@@ -40,6 +40,14 @@ class SerialPorts(Interface):
         self.lick_thread = ThreadPoolExecutor(max_workers=4)
         self.lick_thread.submit(self.check_events)
         self.resp_time_p = -1
+        self.channels = {
+            "Liquid": {
+                1: self.serial.dtr,
+            },
+            "Lick": {
+                1: self.serial.dsr,
+            },
+        }
 
     def give_liquid(self, port, duration=False, log=True):
         """Trigger liquid delivery on a specified port.
@@ -56,17 +64,19 @@ class SerialPorts(Interface):
     def check_events(self):
         """Monitor lick events on the serial port and log corresponding activity."""
         while not self.stop_flag.is_set():
-            if self.serial.dsr is True:
-                self._lick_port_activated()
+            # check if any of the channels is activated
+            for channel in self.channels["Lick"]:
+                if self.channels["Lick"][channel] is True:
+                    self._lick_port_activated(channel)
             time.sleep(0.05)
 
-    def _lick_port_activated(self):
+    def _lick_port_activated(self, port):
         """Handle activation of the lick port and log the corresponding activity."""
         resp_time = self.logger.logger_timer.elapsed_time()
         if self.resp_tmst == resp_time:
             return
         self.resp_tmst = resp_time
-        self.response = self.ports[Port(type="Lick", port=1) == self.ports][0]
+        self.response = self.ports[Port(type="Lick", port=port) == self.ports][0]
         self.beh.log_activity({**self.response.__dict__, "time": self.resp_tmst})
 
     def _give_pulse(self, port, duration):
@@ -77,9 +87,9 @@ class SerialPorts(Interface):
             duration: Duration of the liquid pulse in milliseconds.
         """
         # TODO: use a port and fint the serial connection based on the dictionary
-        self.serial.dtr = True
+        self.channels["Liquid"][port] = True
         time.sleep(duration / 1000)
-        self.serial.dtr = False
+        self.channels["Liquid"][port] = False
 
     def cleanup(self):
         """Clean up resources and stop asynchronous tasks."""
