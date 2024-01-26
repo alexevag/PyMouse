@@ -122,13 +122,31 @@ class DictStruct:
 
 
 def read_yalm(path, filename, variable):
-    """check if file exist and return the variable"""
-    if os.path.exists(path + filename):
-        stream = open(path + filename, "r", encoding="UTF-8")
-        file_yalm = yaml.safe_load(stream)
-        return file_yalm[variable]
+    """
+    Read a YAML file and return a specific variable.
+
+    Parameters:
+        path (str): The path to the directory containing the file.
+        filename (str): The name of the YAML file.
+        variable (str): The name of the variable to retrieve from the YAML file.
+
+    Returns:
+        Any: The value of the specified variable from the YAML file.
+
+    Raises:
+        FileNotFoundError: If the specified file does not exist.
+        KeyError: If the specified variable is not found in the YAML file.
+    """
+    file_path = os.path.join(path, filename)
+    if os.path.exists(file_path):
+        with open(file_path, "r", encoding="UTF-8") as stream:
+            file_yaml = yaml.safe_load(stream)
+            try:
+                return file_yaml[variable]
+            except KeyError as exc:
+                raise KeyError(f"The variable '{variable}' is not found in the YAML file.") from exc
     else:
-        raise Exception(f"there is no file {filename} in directory: {path}")
+        raise FileNotFoundError(f"There is no file '{filename}' in directory: '{path}'")
 
 def shared_memory_array(name, rows_len, columns_len, _dtype="float32"):
     """
