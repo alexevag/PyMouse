@@ -102,6 +102,7 @@ class OpenField(Behavior, dj.Manual):
 
         # start DLC process
         self.dlc = DLC(
+            self.exp,
             self.process_q,
             self.calibration_queue,
             self.frame_tmst,
@@ -459,9 +460,11 @@ class OpenField(Behavior, dj.Manual):
 
     def exit(self):
         super().exit()
-
+        print("cam stop")
         self.cam.stop_rec()
+        print("dlc close")
         self.dlc._close()
+        print("interface cleanup")
         self.interface.cleanup()
         # clear mp Queue
         self.calibration_queue.close()

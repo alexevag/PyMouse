@@ -52,6 +52,7 @@ class DLC:
 
     def __init__(
         self,
+        exp,
         frame_process,
         calibration_queue,
         frame_tmst,
@@ -60,6 +61,7 @@ class DLC:
         logger,
         joints,
     ):
+        self.exp =exp
         self.path = path
         self.nose_y = 0
         self.theta = 0
@@ -141,16 +143,16 @@ class DLC:
             #     ("angle", np.double),
             # ]
 
-            _, self.pose_hdf5_processed = self.logger.createDataset(
+            filename_dlc, self.pose_hdf5_processed = self.logger.createDataset(
                 self.source_path,
                 self.target_path,
                 dataset_name="dlc_processed",
                 dataset_type=np.dtype(joints_types),
             )
 
-            # self.exp.log_recording(dict(rec_aim='OpenField', software='PyMouse', version='0.1',
-            #                 filename=filename_dlc, source_path=self.source_path,
-            #                 target_path=self.target_path, rec_type='behavioral'))
+            self.exp.log_recording(dict(rec_aim='OpenField', software='PyMouse', version='0.1',
+                            filename=filename_dlc, source_path=self.source_path,
+                            target_path=self.target_path, rec_type='behavioral'))
 
         # start processing the camera frames
         self.process()

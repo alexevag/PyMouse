@@ -41,9 +41,9 @@ class Camera:
     A meta-class for capturing and recording video from different sources.
 
     Args:
-        source_path (str, optional): The path(local for speed) where video frames 
+        source_path (str, optional): The path(local for speed) where video frames
         will be saved. Defaults to None.
-        target_path (str, optional): The path where recorded videos will be 
+        target_path (str, optional): The path where recorded videos will be
         stored (copy from source_path). Defaults to None.
         filename (str, optional): The filename for recorded videos. Defaults to None.
         fps (int, optional): Frames per second for recording. Defaults to 30.
@@ -90,29 +90,29 @@ class Camera:
         self.logger_timer = logger_timer
         self.process_queue = process_queue
         if logger is not None:
-            _, self.dataset = logger.createDataset(
+            filename_tmst, self.dataset = logger.createDataset(
                 self.source_path,
                 self.target_path,
                 dataset_name="frame_tmst",
                 dataset_type=np.dtype([("tmst", np.double)]),
             )
-            # self.exp.log_recording(dict(rec_aim='OpenField', software='PyMouse', version='0.1',
-            #                 filename=filename_tmst, source_path=self.source_path,
-            #                 target_path=self.target_path, rec_type='behavioral'))
-        # self.Writer = Writer
-        # dataset_type = np.dtype([("tmst", np.double)])
-        # # self.dataset_tmst = dict()
-        # self.dataset_tmst = self.Writer(self.source_path + self.filename+'.h5', target_path)
-        # self.dataset_tmst.createDataset("frame_tmst",
-        # shape=(len(dataset_type.names),), dtype=dataset_type)
+            self.exp.log_recording(
+                dict(
+                    rec_aim="OpenField",
+                    software="PyMouse",
+                    version="0.1",
+                    filename=filename_tmst,
+                    source_path=self.source_path,
+                    target_path=self.target_path,
+                    rec_type="behavioral",
+                )
+            )
 
         if not globals()["IMPORT_SKVIDEO"]:
             raise ImportError(
                 "you need to install the skvideo: sudo pip3 install sk-video"
             )
-
-        self.setup()
-
+        # self.setup()
         self.camera_process = mp.Process(self.start_rec())
         self.camera_process.start()
         # loc video recording
@@ -205,7 +205,7 @@ class Camera:
         """
         Start video recording.
         """
-        print("Start rec")
+        self.setup()
         self.capture_runner.start()
         self.write_runner.start()
 
@@ -224,12 +224,10 @@ class Camera:
         Stop video recording.
         """
         self.stop.set()
-        self.capture_runner.join()
-        self.write_runner.join()
-        print("self.camera_process.join()")
         self.camera_process.join()
         self.camera_process.close()
-        print("self.camera_process.close()")
+        self.capture_runner.join()
+        self.write_runner.join()
 
     def rec(self):
         """
@@ -275,7 +273,7 @@ class WebCam(Camera):
         Initializes a WebCam instance.
 
         Args:
-            resolution (Tuple[int, int], optional): Resolution of the webcam. 
+            resolution (Tuple[int, int], optional): Resolution of the webcam.
             Defaults to (640, 480).
 
         Raises:
@@ -319,7 +317,7 @@ class WebCam(Camera):
                 "-preset": "ultrafast",
             },
         )
-        self.setup()
+        # self.setup()
 
     def set_resolution(self, width, height):
         """set the resolution of the webcamera if it is possible
