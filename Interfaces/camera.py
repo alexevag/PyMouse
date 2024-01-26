@@ -98,13 +98,12 @@ class Camera:
             )
             self.exp.log_recording(
                 dict(
-                    rec_aim="OpenField",
-                    software="PyMouse",
+                    rec_aim="sync",
+                    software="EthoPy",
                     version="0.1",
                     filename=filename_tmst,
                     source_path=self.source_path,
                     target_path=self.target_path,
-                    rec_type="behavioral",
                 )
             )
 
@@ -118,8 +117,8 @@ class Camera:
         # loc video recording
         self.exp.log_recording(
             dict(
-                rec_aim="OpenField",
-                software="PyMouse",
+                rec_aim="openfield",
+                software="EthoPy",
                 version="0.1",
                 filename=self.filename,
                 source_path=self.source_path,

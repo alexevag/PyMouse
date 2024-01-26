@@ -150,9 +150,13 @@ class DLC:
                 dataset_type=np.dtype(joints_types),
             )
 
-            self.exp.log_recording(dict(rec_aim='OpenField', software='PyMouse', version='0.1',
-                            filename=filename_dlc, source_path=self.source_path,
-                            target_path=self.target_path, rec_type='behavioral'))
+            self.exp.log_recording(dict(rec_aim='body', 
+                                        software='Ethopy', 
+                                        version='0.1',
+                                        filename=filename_dlc, 
+                                        source_path=self.source_path,
+                                        target_path=self.target_path, 
+                                        ))
 
         # start processing the camera frames
         self.process()
