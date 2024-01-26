@@ -1,3 +1,5 @@
+import time
+
 import datajoint as dj
 
 from core.Experiment import ExperimentClass, State, experiment
@@ -85,6 +87,8 @@ class PreTrial(Experiment):
     def next(self):
         if self.is_stopped():
             return "Exit"
+        elif self.beh.is_sleep_time():
+            return 'Offtime'
         elif self.beh.is_ready_start():
             return "Trial"
         else:
@@ -199,6 +203,30 @@ class InterTrial(Experiment):
 
     def exit(self):
         self.stim.fill()
+
+# class Offtime(Experiment):
+#     def entry(self):
+#         super().entry()
+#         self.stim.fill([0, 0, 0])
+#         self.release()
+
+#     def run(self):
+#         if self.logger.setup_status not in ['sleeping', 'wakeup'] and self.beh.is_sleep_time():
+#             self.logger.update_setup_info({'status': 'sleeping'})
+#         self.logger.ping()
+#         time.sleep(1)
+
+#     def next(self):
+#         if self.is_stopped():  # if wake up then update session
+#             return 'Exit'
+#         elif not self.beh.is_sleep_time():
+#             return 'PreTrial'
+#         else:
+#             return 'Offtime'
+
+#     def exit(self):
+#         if self.logger.setup_status in ['wakeup', 'sleeping']:
+#             self.logger.update_setup_info({'status': 'running'})
 
 
 class Exit(Experiment):
