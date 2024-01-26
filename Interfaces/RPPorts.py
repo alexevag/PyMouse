@@ -3,7 +3,7 @@ import numpy as np
 from concurrent.futures import ThreadPoolExecutor
 from threading import Event
 from core.Interface import *
-from Interfaces.Camera import PiCamera
+from Interfaces.camera import PiCamera
 import multiprocessing as mp
 
 
