@@ -34,20 +34,20 @@ class SerialPorts(Interface):
         self.serial.dtr = False
         self.timer = Timer()
         self.frequency = 10
+        self.channels = {
+            "Liquid": {
+                1: self.serial.setDTR,
+            },
+            "Lick": {
+                1: self.serial.getDSR,
+            },
+        }
         self.thread = ThreadPoolExecutor(max_workers=4)
         self.stop_flag = mp.Event()
         self.stop_flag.clear()
         self.lick_thread = ThreadPoolExecutor(max_workers=4)
         self.lick_thread.submit(self.check_events)
         self.resp_time_p = -1
-        self.channels = {
-            "Liquid": {
-                1: self.serial.dtr,
-            },
-            "Lick": {
-                1: self.serial.dsr,
-            },
-        }
 
     def give_liquid(self, port, duration=False, log=True):
         """Trigger liquid delivery on a specified port.
@@ -66,7 +66,7 @@ class SerialPorts(Interface):
         while not self.stop_flag.is_set():
             # check if any of the channels is activated
             for channel in self.channels["Lick"]:
-                if self.channels["Lick"][channel] is True:
+                if self.channels["Lick"][channel]() is True:
                     self._lick_port_activated(channel)
             time.sleep(0.05)
 
@@ -87,9 +87,9 @@ class SerialPorts(Interface):
             duration: Duration of the liquid pulse in milliseconds.
         """
         # TODO: use a port and fint the serial connection based on the dictionary
-        self.channels["Liquid"][port] = True
+        self.channels["Liquid"][port](True)
         time.sleep(duration / 1000)
-        self.channels["Liquid"][port] = False
+        self.channels["Liquid"][port](False)
 
     def cleanup(self):
         """Clean up resources and stop asynchronous tasks."""
