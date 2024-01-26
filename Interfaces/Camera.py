@@ -63,6 +63,7 @@ class Camera:
 
     def __init__(
         self,
+        exp,
         source_path: Optional[str] = None,
         target_path: Optional[str] = None,
         filename: Optional[str] = None,
@@ -71,6 +72,7 @@ class Camera:
         process_queue: bool = False,
         logger=None,
     ):
+        self.exp = exp
         self.initialized = threading.Event()
         self.initialized.clear()
 
@@ -110,6 +112,20 @@ class Camera:
             )
 
         self.setup()
+
+        self.camera_process = mp.Process(self.start_rec())
+        self.camera_process.start()
+        # loc video recording
+        self.exp.log_recording(
+            dict(
+                rec_aim="OpenField",
+                software="PyMouse",
+                version="0.1",
+                filename=self.filename,
+                source_path=self.source_path,
+                target_path=self.target_path,
+            )
+        )
 
     @property
     def filename(self):

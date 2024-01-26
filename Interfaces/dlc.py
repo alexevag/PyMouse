@@ -50,7 +50,15 @@ class DLC:
         setup(frame_process, calibration_queue, frame_tmst): Perform DLC setup and initialization.
     """
 
-    def __init__(self, path: str, shared_memory_shape, logger, joints):
+    def __init__(
+        self,
+        frame_process,
+        calibration_queue,
+        path: str,
+        shared_memory_shape,
+        logger,
+        joints,
+    ):
         self.path = path
         self.nose_y = 0
         self.theta = 0
@@ -75,8 +83,8 @@ class DLC:
 
         self.curr_pose = np.zeros((3, 3))
 
-        self.frame_process = mp.Queue()
-        self.frame_process.cancel_join_thread()
+        self.frame_process = frame_process
+        self.calibration_queue = calibration_queue
 
         self.dlc_proc = Processor()
         self.dlc_live = None
@@ -86,6 +94,12 @@ class DLC:
         self.frame_tmst = None
 
         self.frame = None
+
+        self.dlc_live_process = mp.Process(
+            target=self.setup,
+            args=(self.frame_process, self.calibration_queue, self.frame_tmst),
+        )
+        self.dlc_live_process.start()
 
     def setup(self, frame_process, calibration_queue, frame_tmst):
         """

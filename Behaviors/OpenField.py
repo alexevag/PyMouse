@@ -90,6 +90,7 @@ class OpenField(Behavior, dj.Manual):
         self.session = self.logger.trial_key["session"]
         animal_id_session_str = f"animal_id_{self.animal_id}_session_{self.session}"
         self.cam = WebCam(
+            self.exp,
             source_path=self.camera_source_path,
             target_path=self.camera_target_path,
             filename=animal_id_session_str,
@@ -99,32 +100,15 @@ class OpenField(Behavior, dj.Manual):
             resolution=self.resolution,
         )
 
-        self.camera_process = mp.Process(self.cam.start_rec())
-        self.camera_process.start()
-        # loc video recording
-        self.exp.log_recording(
-            dict(
-                rec_aim="OpenField",
-                software="PyMouse",
-                version="0.1",
-                filename=self.cam.filename,
-                source_path=self.cam.source_path,
-                target_path=self.cam.target_path,
-            )
-        )
-
         # start DLC process
         self.dlc = DLC(
+            self.process_q,
+            self.calibration_queue,
             path=self.dlc_model_path,
             shared_memory_shape=self.shared_memory_shape,
             logger=self.logger,
             joints=self.all_joints_names,
         )
-        self.dlc_live_process = mp.Process(
-            target=self.dlc.setup,
-            args=(self.process_q, self.calibration_queue, self.frame_tmst),
-        )
-        self.dlc_live_process.start()
 
         # Wait for 15 seconds for the value to be available in the queue
         # if it takes more something is not working properly
