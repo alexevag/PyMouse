@@ -54,6 +54,7 @@ class DLC:
         self,
         frame_process,
         calibration_queue,
+        frame_tmst,
         path: str,
         shared_memory_shape,
         logger,
@@ -91,7 +92,7 @@ class DLC:
 
         self.pose_hdf5 = None
         self.pose_hdf5_processed = None
-        self.frame_tmst = None
+        self.frame_tmst = frame_tmst
 
         self.frame = None
 

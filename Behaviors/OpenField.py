@@ -104,6 +104,7 @@ class OpenField(Behavior, dj.Manual):
         self.dlc = DLC(
             self.process_q,
             self.calibration_queue,
+            self.frame_tmst,
             path=self.dlc_model_path,
             shared_memory_shape=self.shared_memory_shape,
             logger=self.logger,
@@ -195,10 +196,6 @@ class OpenField(Behavior, dj.Manual):
 
         # self.screen_size = int(screen_width * 10)  # mm
         self.screen_size = 215
-        print(
-            "self.screen_size self.screen_size self.screen_sizeself.screen_sizeself.screen_size ",
-            self.screen_size,
-        )
         self.screen_pos = np.array([[self.screen_size, 0], [self.screen_size, self.screen_size]])
         self.resolution = (camera_params["resolution_x"], camera_params["resolution_y"])
 
@@ -263,7 +260,7 @@ class OpenField(Behavior, dj.Manual):
         self.in_position_flag = False
 
         super().prepare(condition)
-        
+
         self.init_radius_p = int(self.curr_cond["init_radius"] / self.pixel_unit)
         self.radius_p = int(self.curr_cond["radius"] / self.pixel_unit)
 
