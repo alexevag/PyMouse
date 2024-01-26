@@ -226,6 +226,10 @@ class Camera:
         self.stop.set()
         self.capture_runner.join()
         self.write_runner.join()
+        print("self.camera_process.join()")
+        self.camera_process.join()
+        self.camera_process.close()
+        print("self.camera_process.close()")
 
     def rec(self):
         """

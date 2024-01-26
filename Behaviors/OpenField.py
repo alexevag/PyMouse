@@ -473,13 +473,8 @@ class OpenField(Behavior, dj.Manual):
         # self.sm.close()
         # self.sm.unlink()
         # join processes
-        self.camera_process.join()
-        self.camera_process.close()
         time.sleep(0.5)
-        print("self.camera_process.join()")
         self.logger.closeDatasets()
         print("self.logger.closeDatasets()")
         time.sleep(1)
-        print("self.dlc_live_process.join()")
-        self.dlc_live_process.terminate()
-        print("self.dlc_live_process.join()")
+

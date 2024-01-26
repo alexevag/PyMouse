@@ -418,3 +418,6 @@ class DLC:
         self.sm.unlink()
         self.logger.closeDatasets()
         self.move_hdf()
+        print("self.dlc_live_process.join()")
+        self.dlc_live_process.terminate()
+        print("self.dlc_live_process.join()")
