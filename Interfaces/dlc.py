@@ -136,12 +136,6 @@ class DLC:
                 dataset_name="dlc",
                 dataset_type=np.dtype(joints_types),
             )
-            # joints_types_processed = [
-            #     ("tmst", np.double),
-            #     ("head_x", np.double),
-            #     ("head_y", np.double),
-            #     ("angle", np.double),
-            # ]
 
             filename_dlc, self.pose_hdf5_processed = self.logger.createDataset(
                 self.source_path,
