@@ -144,12 +144,12 @@ class DLC:
                 dataset_type=np.dtype(joints_types),
             )
 
-            self.exp.log_recording(dict(rec_aim='body', 
-                                        software='Ethopy', 
+            self.exp.log_recording(dict(rec_aim='body',
+                                        software='Ethopy',
                                         version='0.1',
-                                        filename=filename_dlc, 
+                                        filename=filename_dlc,
                                         source_path=self.source_path,
-                                        target_path=self.target_path, 
+                                        target_path=self.target_path 
                                         ))
 
         # start processing the camera frames
@@ -178,12 +178,10 @@ class DLC:
         corners = []
 
         # TODO: add a check here to make sure that corners are reasonable distanced
-        # TODO: use a more robust way instead of the 30 images to define the corners
-        # like use only images with very high confidence results
-
-        # use 30 images and find the median of the corners
+        
+        # use 4 images and find the mean of the corners
         # in order to avoid frames with no visible corners
-        while len(corners) < 10:
+        while len(corners) < 4:
             _, _frame = self.frame_process.get()
             pose = dlc_live.get_pose(_frame / 255)
             # print("pose " , pose)
