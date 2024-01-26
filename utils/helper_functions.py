@@ -1,7 +1,13 @@
-import numpy as np
-from scipy import ndimage
+import base64
+import functools
+import hashlib
+import os
 from itertools import product
-import hashlib, base64, functools
+from multiprocessing.shared_memory import SharedMemory
+
+import numpy as np
+import yaml
+from scipy import ndimage
 
 
 def sub2ind(array_shape, rows, cols):
@@ -115,3 +121,31 @@ class DictStruct:
         return self.__dict__.values()
 
 
+def read_yalm(path, filename, variable):
+    """check if file exist and return the variable"""
+    if os.path.exists(path + filename):
+        stream = open(path + filename, "r", encoding="UTF-8")
+        file_yalm = yaml.safe_load(stream)
+        return file_yalm[variable]
+    else:
+        raise Exception(f"there is no file {filename} in directory: {path}")
+    
+def shared_memory_array(name, rows_len, columns_len, _dtype="float32"):
+    _bytes = np.dtype(_dtype).itemsize
+    n_bytes = rows_len * columns_len * _bytes
+    try:
+        # create the shared memory
+        sm = SharedMemory(name=name, create=True, size=n_bytes)
+    except FileExistsError:
+        # sometimes when its not close correctly the sharedmemory remains
+        # this is a workaround but it can create issues when the new array is not
+        # the same size
+        sm = SharedMemory(name=name, create=False, size=n_bytes)
+    except Exception as shm_e:
+        raise Exception("Error:" + str(shm_e))
+
+    # create a new numpy array that uses the shared memory
+    _data = np.ndarray((rows_len, columns_len), dtype=_dtype, buffer=sm.buf)
+    _data.fill(0)
+
+    return _data, sm
