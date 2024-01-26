@@ -1,36 +1,19 @@
 import multiprocessing as mp
-import os
 import sys
 import time
-from multiprocessing.shared_memory import SharedMemory
+
 
 import datajoint as dj
 import numpy as np
-import yaml
 from cv2 import getAffineTransform, invertAffineTransform
 
 from core.Behavior import Behavior, behavior
 from Interfaces.camera import WebCam
 from Interfaces.dlc import DLC
-
+from utils.helper_functions import read_yalm, shared_memory_array
 
 @behavior.schema
 class OpenField(Behavior, dj.Manual):
-    """_summary_
-
-    Args:
-        Behavior (_type_): _description_
-        dj (_type_): _description_
-
-    Raises:
-        Exception: _description_
-        Exception: _description_
-        Exception: _description_
-
-    Returns:
-        _type_: _description_
-    """
-
     definition = """
     # This class handles the behavior variables for RP
     ->BehCondition
@@ -81,14 +64,68 @@ class OpenField(Behavior, dj.Manual):
     required_fields = ["reward_loc_x", "reward_amount"]
     default_key = {"reward_type": "water", "response_port": 1, "reward_port": 1}
 
+    def init(self):
+        # constant parameters
+        self.frame_tmst = mp.Value("d", 0)
+        self.model_columns_len = 3  # x,y,prediction confidence constant
+
+        # self.camera_source_path = os.path.abspath(os.getcwd())+'/source/'
+        self.camera_source_path = "/home/eflab/Desktop/PyMouse_latest/PyMouse/video/"
+        self.camera_target_path = "/mnt/lab/data/OpenField/"
+
+        # read camera parameters
+        camera_params = self.logger.get(
+            table="SetupConfiguration.Camera",
+            key=f"setup_conf_idx={self.exp.params['setup_conf_idx']}",
+            as_dict=True,
+        )[0]
+        # read screen parameters
+        screen_params = self.logger.get(
+            table="SetupConfiguration.Screen",
+            key=f"setup_conf_idx={self.exp.params['setup_conf_idx']}",
+            as_dict=True,
+        )[0]
+        # screen_height, screen_width = self.screen_dimensions(screen_params["size"])
+
+        # self.screen_size = int(screen_width * 10)  # mm
+        self.screen_size = 215
+        self.screen_pos = np.array(
+            [[self.screen_size, 0], [self.screen_size, self.screen_size]]
+        )
+        self.resolution = (camera_params["resolution_x"], camera_params["resolution_y"])
+
+        # create a queue that returns the arena cornerns
+        self.calibration_queue = mp.Queue(maxsize=1)
+        self.calibration_queue.cancel_join_thread()
+
+        # create share mp Queue
+        self.process_q = mp.Queue(maxsize=2)
+        self.process_q.cancel_join_thread()
+
+        self.dlc_model_path = self.exp.params["model_path"]
+        self.all_joints_names = read_yalm(
+            path=self.dlc_model_path,
+            filename="pose_cfg.yaml",
+            variable="all_joints_names",
+        )
+        self.all_joints_name_len = len(self.all_joints_names)
+
+        self.pose, self.sm = shared_memory_array(
+            name="pose",
+            rows_len=self.all_joints_name_len,
+            columns_len=self.model_columns_len,
+        )
+        self.shared_memory_shape = (self.all_joints_name_len, self.model_columns_len)
+
     def setup(self, exp):
         super(OpenField, self).setup(exp)
-        self.init_params()
+        self.init()
 
         # start camera recording process
         self.animal_id = self.logger.trial_key["animal_id"]
         self.session = self.logger.trial_key["session"]
         animal_id_session_str = f"animal_id_{self.animal_id}_session_{self.session}"
+
         self.cam = WebCam(
             self.exp,
             source_path=self.camera_source_path,
@@ -129,29 +166,8 @@ class OpenField(Behavior, dj.Manual):
 
         self.M, self.M_inv = self.affine_transform(self.corners, self.screen_size)
 
-        # self.pixel_unit(self.corners, self.screen_size)
         corners_dist = np.linalg.norm(self.corners[0] - self.corners[1])
         self.pixel_unit = self.screen_size / corners_dist
-
-    def shared_memory_array(self, name, rows_len, columns_len, _dtype="float32"):
-        _bytes = np.dtype(_dtype).itemsize
-        n_bytes = rows_len * columns_len * _bytes
-        try:
-            # create the shared memory
-            sm = SharedMemory(name=name, create=True, size=n_bytes)
-        except FileExistsError:
-            # sometimes when its not close correctly the sharedmemory remains
-            # this is a workaround but it can create issues when the new array is not
-            # the same size
-            sm = SharedMemory(name=name, create=False, size=n_bytes)
-        except Exception as shm_e:
-            raise Exception("Error:" + str(shm_e))
-
-        # create a new numpy array that uses the shared memory
-        _data = np.ndarray((rows_len, columns_len), dtype=_dtype, buffer=sm.buf)
-        _data.fill(0)
-
-        return _data, sm
 
     def screen_dimensions(self, diagonal_inches, aspect_ratio=16 / 9):
         """returns the width and height of a screen based on ints
@@ -171,70 +187,6 @@ class OpenField(Behavior, dj.Manual):
         y_cm = aspect_ratio * x_cm
 
         return x_cm, y_cm
-
-    def init_params(self):
-        # constant parameters
-        self.frame_tmst = mp.Value("d", 0)
-        self.model_columns_len = 3  # x,y,prediction confidence constant
-
-        # self.camera_source_path = os.path.abspath(os.getcwd())+'/source/'
-        self.camera_source_path = "/home/eflab/Desktop/PyMouse_latest/PyMouse/video/"
-        self.camera_target_path = "/mnt/lab/data/OpenField/"
-
-        # read camera parameters
-        camera_params = self.logger.get(
-            table="SetupConfiguration.Camera",
-            key=f"setup_conf_idx={self.exp.params['setup_conf_idx']}",
-            as_dict=True,
-        )[0]
-        # read screen parameters
-        screen_params = self.logger.get(
-            table="SetupConfiguration.Screen",
-            key=f"setup_conf_idx={self.exp.params['setup_conf_idx']}",
-            as_dict=True,
-        )[0]
-        # screen_height, screen_width = self.screen_dimensions(screen_params["size"])
-
-        # self.screen_size = int(screen_width * 10)  # mm
-        self.screen_size = 215
-        self.screen_pos = np.array([[self.screen_size, 0], [self.screen_size, self.screen_size]])
-        self.resolution = (camera_params["resolution_x"], camera_params["resolution_y"])
-
-        # create a queue that returns the arena cornerns
-        self.calibration_queue = mp.Queue(maxsize=1)
-        self.calibration_queue.cancel_join_thread()
-
-        # create share mp Queue
-        self.process_q = mp.Queue(maxsize=2)
-        self.process_q.cancel_join_thread()
-
-        self.dlc_model_path = self.exp.params["model_path"]
-
-        self.all_joints_names = self.read_yalm(
-            path=self.dlc_model_path,
-            filename="pose_cfg.yaml",
-            variable="all_joints_names",
-        )
-
-        self.all_joints_name_len = len(self.all_joints_names)
-        self.pose, self.sm = self.shared_memory_array(
-            name="pose",
-            rows_len=self.all_joints_name_len,
-            columns_len=self.model_columns_len,
-        )
-        self.shared_memory_shape = (self.all_joints_name_len, self.model_columns_len)
-
-    def read_yalm(self, path, filename, variable):
-        """check if file exist and return the joint names"""
-        # read dlc_pose_cfg and find number and joints names
-        if os.path.exists(path + filename):
-            stream = open(path + filename, "r", encoding="UTF-8")
-            dlc_pose_cfg = yaml.safe_load(stream)
-            all_joints_names = dlc_pose_cfg[variable]
-        else:
-            raise Exception(f"there is no file {filename} in directory: {path}")
-
-        return all_joints_names
 
     def affine_transform(self, corners, screen_size):
         """_summary_
@@ -285,7 +237,8 @@ class OpenField(Behavior, dj.Manual):
             real_pos = (-np.array(pos) + 0.5) * const_dim
 
         locs = []
-        if isinstance(real_pos, float): real_pos = [real_pos]
+        if isinstance(real_pos, float):
+            real_pos = [real_pos]
         for rl_pos in real_pos:
             if dim_change == 1:
                 coords = np.dot(self.M_inv, np.array([screen_pos[0, 0], rl_pos, 1]))
@@ -438,7 +391,9 @@ class OpenField(Behavior, dj.Manual):
             # self.log_reward(self.reward_amount[self.licked_port])
             self.log_reward(self.reward_amount[self.licked_port])
             # self.update_history(self.response.port, self.reward_amount[self.licked_port])
-            self.update_history(self.response.port, self.reward_amount[self.licked_port])
+            self.update_history(
+                self.response.port, self.reward_amount[self.licked_port]
+            )
             return True
         return False
 
@@ -477,4 +432,3 @@ class OpenField(Behavior, dj.Manual):
         self.logger.closeDatasets()
         print("self.logger.closeDatasets()")
         time.sleep(1)
-
