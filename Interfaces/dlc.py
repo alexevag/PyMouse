@@ -319,6 +319,7 @@ class DLC:
         len_high_conf_bdparts = len(high_conf_bdparts)
 
         if len_high_conf_bdparts < 2:
+            # if more than one point missing do not update pose
             pose = self.curr_pose
         elif len_high_conf_bdparts == 2:
             curr_pose = np.array(self.curr_pose[0:4, 0:2])
