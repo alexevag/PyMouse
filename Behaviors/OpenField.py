@@ -2,15 +2,14 @@ import multiprocessing as mp
 import sys
 import time
 
-
 import datajoint as dj
 import numpy as np
-from cv2 import getAffineTransform, invertAffineTransform
 
 from core.Behavior import Behavior, behavior
 from Interfaces.camera import WebCam
 from Interfaces.dlc import DLC
 from utils.helper_functions import read_yalm, shared_memory_array
+
 
 @behavior.schema
 class OpenField(Behavior, dj.Manual):
@@ -64,12 +63,9 @@ class OpenField(Behavior, dj.Manual):
     required_fields = ["reward_loc_x", "reward_amount"]
     default_key = {"reward_type": "water", "response_port": 1, "reward_port": 1}
 
-    def init(self):
+    def __init__(self):
         # constant parameters
-        self.frame_tmst = mp.Value("d", 0)
         self.model_columns_len = 3  # x,y,prediction confidence constant
-
-        # self.camera_source_path = os.path.abspath(os.getcwd())+'/source/'
         self.camera_source_path = "/home/eflab/Desktop/PyMouse_latest/PyMouse/video/"
         self.camera_target_path = "/mnt/lab/data/OpenField/"
 
@@ -79,14 +75,14 @@ class OpenField(Behavior, dj.Manual):
             key=f"setup_conf_idx={self.exp.params['setup_conf_idx']}",
             as_dict=True,
         )[0]
-        # read screen parameters
-        screen_params = self.logger.get(
-            table="SetupConfiguration.Screen",
-            key=f"setup_conf_idx={self.exp.params['setup_conf_idx']}",
-            as_dict=True,
-        )[0]
-        # screen_height, screen_width = self.screen_dimensions(screen_params["size"])
 
+        # read screen parameters
+        # screen_params = self.logger.get(
+        #     table="SetupConfiguration.Screen",
+        #     key=f"setup_conf_idx={self.exp.params['setup_conf_idx']}",
+        #     as_dict=True,
+        # )[0]
+        # screen_height, screen_width = self.screen_dimensions(screen_params["size"])
         # self.screen_size = int(screen_width * 10)  # mm
         self.screen_size = 215
         self.screen_pos = np.array(
@@ -95,31 +91,30 @@ class OpenField(Behavior, dj.Manual):
         self.resolution = (camera_params["resolution_x"], camera_params["resolution_y"])
 
         # create a queue that returns the arena cornerns
-        self.calibration_queue = mp.Queue(maxsize=1)
-        self.calibration_queue.cancel_join_thread()
+        self.dlc_queue = mp.Queue(maxsize=1)
+        self.dlc_queue.cancel_join_thread()
 
-        # create share mp Queue
+        # create a mp Queue for the communication of dlc and camera
         self.process_q = mp.Queue(maxsize=2)
         self.process_q.cancel_join_thread()
 
-        self.dlc_model_path = self.exp.params["model_path"]
+        # create shared memory for the pose sharing between behaviour and dlc process
         self.all_joints_names = read_yalm(
-            path=self.dlc_model_path,
+            path=self.self.exp.params["model_path"],
             filename="pose_cfg.yaml",
             variable="all_joints_names",
         )
-        self.all_joints_name_len = len(self.all_joints_names)
 
+        # return only x,t,tmst and angle
         self.pose, self.sm = shared_memory_array(
             name="pose",
-            rows_len=self.all_joints_name_len,
-            columns_len=self.model_columns_len,
+            rows_len=1,
+            columns_len=4,
         )
-        self.shared_memory_shape = (self.all_joints_name_len, self.model_columns_len)
+        self.shared_memory_shape = (1, 4)
 
     def setup(self, exp):
         super(OpenField, self).setup(exp)
-        self.init()
 
         # start camera recording process
         self.animal_id = self.logger.trial_key["animal_id"]
@@ -141,20 +136,12 @@ class OpenField(Behavior, dj.Manual):
         self.dlc = DLC(
             self.exp,
             self.process_q,
-            self.calibration_queue,
-            self.frame_tmst,
-            path=self.dlc_model_path,
+            self.dlc_queue,
+            path=self.self.exp.params["model_path"],
             shared_memory_shape=self.shared_memory_shape,
             logger=self.logger,
             joints=self.all_joints_names,
         )
-
-        # Wait for 15 seconds for the value to be available in the queue
-        # if it takes more something is not working properly
-        try:
-            self.corners = self.calibration_queue.get(timeout=30)
-        except mp.queues.Empty:
-            raise Exception("Cannot get plane corners coordinates.")
 
         # wait until the dlc setup has finished initialization before start the experiment
         while not self.dlc.setup_ready.is_set():
@@ -164,47 +151,8 @@ class OpenField(Behavior, dj.Manual):
             sys.stdout.flush()
             time.sleep(0.1)
 
-        self.M, self.M_inv = self.affine_transform(self.corners, self.screen_size)
-
         corners_dist = np.linalg.norm(self.corners[0] - self.corners[1])
         self.pixel_unit = self.screen_size / corners_dist
-
-    def screen_dimensions(self, diagonal_inches, aspect_ratio=16 / 9):
-        """returns the width and height of a screen based on ints
-        diagonal
-
-        Args:
-            diagonal_inches (float): the diagonal of the screen in inch
-            aspect_ratio (float, optional): Defaults to 16/9.
-
-        Returns:
-            float, float: height, width
-        """
-        diagonal_cm = diagonal_inches * 2.54
-
-        # Calculate the width (x) and height (y) using the Pythagorean theorem
-        x_cm = np.sqrt((diagonal_cm**2) / (1 + aspect_ratio**2))
-        y_cm = aspect_ratio * x_cm
-
-        return x_cm, y_cm
-
-    def affine_transform(self, corners, screen_size):
-        """_summary_
-
-        Args:
-            corners (_type_): _description_
-            screen_size (_type_): _description_
-
-        Returns:
-            _type_: _description_
-        """
-        pts1 = np.float32([corners[0][:2], corners[1][:2], corners[2][:2]])
-
-        pts2 = np.float32([[0, 0], [screen_size, 0], [0, screen_size]])
-
-        M = getAffineTransform(pts1, pts2)
-        M_inv = invertAffineTransform(M)
-        return M, M_inv
 
     def prepare(self, condition):
         self.logged_pos = False
@@ -214,55 +162,30 @@ class OpenField(Behavior, dj.Manual):
 
         super().prepare(condition)
 
-        self.init_radius_p = int(self.curr_cond["init_radius"] / self.pixel_unit)
-        self.radius_p = int(self.curr_cond["radius"] / self.pixel_unit)
-
-        self.response_locs = self.screen_pos_to_frame_pos(
+        # find real position of the objects
+        self.response_locs_p = self.screen_pos_to_real_pos(
             self.curr_cond["response_loc_x"]
         )
-        self.rew_locs = self.screen_pos_to_frame_pos((self.curr_cond["reward_loc_x"],))
+        self.rew_locs_p = self.screen_pos_to_real_pos((self.curr_cond["reward_loc_x"],))
 
         self.position_tmst = 0
         self.resp_position_idx = -1
 
-    def screen_pos_to_frame_pos(self, pos, const_dim=250):
-        "Convert obj_pos in frame coordinates"
-        screen_pos = self.screen_pos
-        diff_screen_pos = screen_pos[0, :] - screen_pos[1, :]
-        dim_change = np.where(diff_screen_pos != 0)[0][0]
-
-        if diff_screen_pos[dim_change] < 0:
-            real_pos = (np.array(pos) + 0.5) * const_dim
-        else:
-            real_pos = (-np.array(pos) + 0.5) * const_dim
-
-        locs = []
-        if isinstance(real_pos, float):
-            real_pos = [real_pos]
-        for rl_pos in real_pos:
-            if dim_change == 1:
-                coords = np.dot(self.M_inv, np.array([screen_pos[0, 0], rl_pos, 1]))
-            else:
-                coords = np.dot(self.M_inv, np.array([rl_pos, screen_pos[0, 1], 1]))
-            locs.append(list(coords))
-        return locs
-
     def is_ready_start(self):
-        x, y, tmst, angle = self.get_position()
-        start_pos = np.dot(
-            self.M_inv,
-            np.array([self.curr_cond["init_loc_x"], self.curr_cond["init_loc_y"], 1]),
+        x, y, tmst, angle = self.pose
+        r_x, r_y = self.curr_cond["init_loc_x"], self.curr_cond["init_loc_y"]
+        return (
+            np.sum((np.array([r_x, r_y]) - [x, y]) ** 2) ** 0.5
+            < self.curr_cond["init_radius"]
         )
-        r_x, r_y = start_pos[0], start_pos[1]
-        return np.sum((np.array([r_x, r_y]) - [x, y]) ** 2) ** 0.5 < self.init_radius_p
 
     def in_response_loc(self):
         """check if the animal position has been in a specific location"""
-        self.x_cur, self.y_cur, self.tmst_cur, self.angle_cur = self.get_position()
+        self.x_cur, self.y_cur, self.tmst_cur, self.angle_cur = self.pose
 
         # check if pos in response location
         self.resp_position_idx = self.position_in_radius(
-            [self.x_cur, self.y_cur], self.response_locs, self.radius_p
+            [self.x_cur, self.y_cur], self.response_locs, self.curr_cond["radius"]
         )
         if self.resp_position_idx != -1:
             self._resp_loc = self.response_locs[self.resp_position_idx]
@@ -351,25 +274,6 @@ class OpenField(Behavior, dj.Manual):
         # "check if the animal is in a reward location"
         return self.in_loc(is_reward=True)
 
-    def get_position(self):
-        # Example coordinates for triangle vertices and square vertices
-        # pose[0]->nose, pose[1]->ear_left, pose[2]->ear_right
-
-        triangle_vertices = np.array(self.pose[0:4, 0:2])
-        scores = np.array(self.pose[0:4][2])
-
-        # Step 1: Find the centroid of the triangle
-        centroid_triangle = self.find_centroid(triangle_vertices)
-        # Step 2: Compute the vector from the centroid to nose of the triangle
-        vector_to_nose = self.compute_vector(triangle_vertices[0, :], centroid_triangle)
-        # Step 3: Compute the angle (phase) between the vectors
-        angle = self.compute_angle(
-            vector_to_nose, np.array([1, 0])
-        )  # Assuming reference vector is [1, 0]
-
-        # return centroid_triangle[0], centroid_triangle[1], self.frame_tmst.value, angle
-        return self.pose[0, 0], self.pose[0, 1], self.frame_tmst.value, angle
-
     def reward(self, tmst=0):
         """give reward at latest licked port
 
@@ -400,29 +304,39 @@ class OpenField(Behavior, dj.Manual):
     def punish(self):
         self.update_history(self.response.port, punish=True)
 
-    def find_centroid(self, vertices):
-        return np.mean(vertices, axis=0)
+    def screen_pos_to_real_pos(self, pos, const_dim=215):
+        "Convert obj_pos in frame coordinates"
+        screen_pos = self.screen_pos
+        # in a square positions of the screen only one dimension is change
+        diff_screen_pos = screen_pos[0, :] - screen_pos[1, :]
+        dim_change = np.where(diff_screen_pos != 0)[0][0]
 
-    def compute_vector(self, point1, centroid):
-        return point1 - centroid
+        if diff_screen_pos[dim_change] < 0:
+            real_pos = (np.array(pos) + 0.5) * const_dim
+        else:
+            real_pos = (-np.array(pos) + 0.5) * const_dim
 
-    def compute_angle(self, v1, v2):
-        dot_product = np.dot(v1, v2)
-        cross_product = np.cross(v1, v2)
-        angle = np.arctan2(cross_product, dot_product)
-        angle_degrees = np.degrees(angle)
-        return angle_degrees
+        locs = []
+        if isinstance(real_pos, float):
+            real_pos = [real_pos]
+        for rl_pos in real_pos:
+            if dim_change == 1:
+                coords = np.array([screen_pos[0, 0], rl_pos])
+            else:
+                coords = np.array([rl_pos, screen_pos[0, 1]])
+            locs.append(list(coords))
+        return locs
 
     def exit(self):
         super().exit()
         print("cam stop")
         self.cam.stop_rec()
         print("dlc close")
-        self.dlc._close()
+        self.dlc.stop()
         print("interface cleanup")
         self.interface.cleanup()
         # clear mp Queue
-        self.calibration_queue.close()
+        self.dlc_queue.close()
         self.process_q.close()
         # release shared memory
         # self.sm.close()

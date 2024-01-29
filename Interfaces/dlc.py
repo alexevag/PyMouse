@@ -1,12 +1,13 @@
 import multiprocessing as mp
 import os
+import shutil
 import sys
 import time
 from multiprocessing.shared_memory import SharedMemory
-import shutil
 
 import cv2
 import numpy as np
+from cv2 import getAffineTransform, invertAffineTransform
 from dlclive import DLCLive, Processor
 
 np.set_printoptions(suppress=True)
@@ -45,17 +46,13 @@ class DLC:
         pose_hdf5: HDF5 dataset for raw pose data.
         pose_hdf5_processed: HDF5 dataset for processed pose data.
         frame: Current video frame.
-
-    Methods:
-        setup(frame_process, calibration_queue, frame_tmst): Perform DLC setup and initialization.
     """
 
     def __init__(
         self,
         exp,
         frame_process,
-        calibration_queue,
-        frame_tmst,
+        dlc_queue,
         path: str,
         shared_memory_shape,
         logger,
@@ -84,17 +81,21 @@ class DLC:
         self.joints = joints
         self.logger = logger
 
+        self.screen_size = 215
+        self.screen_pos = np.array(
+            [[self.screen_size, 0], [self.screen_size, self.screen_size]]
+        )
+
         self.curr_pose = np.zeros((3, 3))
 
         self.frame_process = frame_process
-        self.calibration_queue = calibration_queue
+        self.dlc_queue = dlc_queue
 
         self.dlc_proc = Processor()
         self.dlc_live = None
 
         self.pose_hdf5 = None
         self.pose_hdf5_processed = None
-        self.frame_tmst = frame_tmst
 
         self.frame = None
 
@@ -130,29 +131,30 @@ class DLC:
 
         self.dlc_live_process = mp.Process(
             target=self.setup,
-            args=(self.frame_process, self.calibration_queue, self.frame_tmst),
+            args=(self.frame_process, self.dlc_queue),
         )
         self.dlc_live_process.start()
 
 
-    def setup(self, frame_process, calibration_queue, frame_tmst):
+    def setup(self, frame_process, dlc_queue):
         """
         Perform DLC setup and initialization.
 
         Args:
             frame_process (mp.Queue): Queue for receiving video frames for processing.
-            calibration_queue (mp.Queue): Queue for sending calibration data.
-            frame_tmst (_type_): Timestamp data.
+            dlc_queue (mp.Queue): Queue for sending calibration data.
         """
         self.frame_process = frame_process
-        self.frame_tmst = frame_tmst
         # find corners of the arena
-        calibration_queue.put(self.find_corners())
+        self.corners = self.find_corners()
+        self.M, self.M_inv = self.affine_transform(self.corners, self.screen_size)
+        dlc_queue.put((self.M, self.M_inv))
 
         # initialize dlc models
         self.dlc_live = DLCLive(self.path, processor=self.dlc_proc)
         self.dlc_live.init_inference(self.frame_process.get()[1] / 255)
 
+        # flag to indicate that all the dlc inits has finished before start experiment
         self.setup_ready.set()
 
         # start processing the camera frames
@@ -166,7 +168,7 @@ class DLC:
         Returns:
             np.ndarray: The 4 corners of the arena.
         """
-        dlc_model_path = (
+        dlc_corners_path = (
             "/home/eflab/Desktop/"
             "Openfield_test_box-Konstantina-2023-11-20/exported-models/"
             "DLC_Openfield_test_box_resnet_50_iteration-2_shuffle-1"
@@ -176,12 +178,11 @@ class DLC:
         _, frame = self.frame_process.get()
         _frame = frame / 255
         dlc_proc = Processor()
-        dlc_live = DLCLive(dlc_model_path, processor=dlc_proc)
+        dlc_live = DLCLive(dlc_corners_path, processor=dlc_proc)
         dlc_live.init_inference(_frame)
         corners = []
 
         # TODO: add a check here to make sure that corners are reasonable distanced
-        
         # use 4 images and find the mean of the corners
         # in order to avoid frames with no visible corners
         while len(corners) < 4:
@@ -206,6 +207,43 @@ class DLC:
         cv2.imwrite("plane_corners.jpeg", _frame)
 
         return corners
+
+    def affine_transform(self, corners, screen_size):
+        """_summary_
+
+        Args:
+            corners (_type_): _description_
+            screen_size (_type_): _description_
+
+        Returns:
+            _type_: _description_
+        """
+        pts1 = np.float32([corners[0][:2], corners[1][:2], corners[2][:2]])
+
+        pts2 = np.float32([[0, 0], [screen_size, 0], [0, screen_size]])
+
+        m = getAffineTransform(pts1, pts2)
+        m_inv = invertAffineTransform(m)
+        return m, m_inv
+
+    def screen_dimensions(self, diagonal_inches, aspect_ratio=16 / 9):
+        """returns the width and height of a screen based on ints
+        diagonal
+
+        Args:
+            diagonal_inches (float): the diagonal of the screen in inch
+            aspect_ratio (float, optional): Defaults to 16/9.
+
+        Returns:
+            float, float: height, width
+        """
+        diagonal_cm = diagonal_inches * 2.54
+
+        # Calculate the width (x) and height (y) using the Pythagorean theorem
+        x_cm = np.sqrt((diagonal_cm**2) / (1 + aspect_ratio**2))
+        y_cm = aspect_ratio * x_cm
+
+        return x_cm, y_cm
 
     def check_pred_confidence(self, scores, threshold=0.7):
         """
@@ -382,9 +420,9 @@ class DLC:
                 p = self.dlc_live.get_pose(self.frame / 255)
                 # check if position need any intervation
                 self.curr_pose = self.update_position(p)
+                self.final_pose = self.get_position(self.curr_posem, tmst)
                 # save pose to the shared memory
-                self.data[:] = self.curr_pose
-                self.frame_tmst.value = tmst
+                self.data[:] = self.final_pose
                 # save in the hdf5 files
                 self.pose_hdf5.append("dlc", np.insert(np.double(p.ravel()), 0, tmst))
                 self.pose_hdf5_processed.append(
@@ -393,6 +431,40 @@ class DLC:
                 )
             else:
                 time.sleep(0.001)
+
+    def get_position(self, pose, tmst):
+        # Example coordinates for triangle vertices and square vertices
+        # pose[0]->nose, pose[1]->ear_left, pose[2]->ear_right
+
+        triangle_vertices = np.array(pose[0:4, 0:2])
+
+        # Step 1: Find the centroid of the triangle
+        centroid_triangle = self.find_centroid(triangle_vertices)
+        # Step 2: Compute the vector from the centroid to nose of the triangle
+        vector_to_nose = self.compute_vector(triangle_vertices[0, :], centroid_triangle)
+        # Step 3: Compute the angle (phase) between the vectors
+        angle = self.compute_angle(
+            vector_to_nose, np.array([1, 0])
+        )  # Assuming reference vector is [1, 0]
+
+        centroid_triangle = np.dot(
+            self.M_inv,
+            np.array([centroid_triangle[0], centroid_triangle[1], 1]),
+        )
+        return centroid_triangle[0], centroid_triangle[1],tmst, angle
+    
+    def find_centroid(self, vertices):
+        return np.mean(vertices, axis=0)
+
+    def compute_vector(self, point1, centroid):
+        return point1 - centroid
+
+    def compute_angle(self, v1, v2):
+        dot_product = np.dot(v1, v2)
+        cross_product = np.cross(v1, v2)
+        angle = np.arctan2(cross_product, dot_product)
+        angle_degrees = np.degrees(angle)
+        return angle_degrees
 
     def move_hdf(self):
         """
@@ -414,7 +486,7 @@ class DLC:
                     )
                     print(f"Transferred file: {file}")
 
-    def _close(self):
+    def stop(self):
         """stop processing"""
         self.close.set()
         self.sm.close()
