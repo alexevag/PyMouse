@@ -111,7 +111,8 @@ class Camera:
             raise ImportError(
                 "you need to install the skvideo: sudo pip3 install sk-video"
             )
-        # self.setup()
+         # TODO: remove sleep
+        time.sleep(1)
         self.camera_process = mp.Process(self.start_rec())
         self.camera_process.start()
         # loc video recording

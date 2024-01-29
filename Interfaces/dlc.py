@@ -98,31 +98,6 @@ class DLC:
 
         self.frame = None
 
-        self.dlc_live_process = mp.Process(
-            target=self.setup,
-            args=(self.frame_process, self.calibration_queue, self.frame_tmst),
-        )
-        self.dlc_live_process.start()
-
-    def setup(self, frame_process, calibration_queue, frame_tmst):
-        """
-        Perform DLC setup and initialization.
-
-        Args:
-            frame_process (mp.Queue): Queue for receiving video frames for processing.
-            calibration_queue (mp.Queue): Queue for sending calibration data.
-            frame_tmst (_type_): Timestamp data.
-        """
-        self.frame_process = frame_process
-        self.frame_tmst = frame_tmst
-        # find corners of the arena
-        calibration_queue.put(self.find_corners())
-
-        # initialize dlc models
-        self.dlc_live = DLCLive(self.path, processor=self.dlc_proc)
-        self.dlc_live.init_inference(self.frame_process.get()[1] / 255)
-
-        self.setup_ready.set()
         if self.logger is not None:
             joints_types = [("tmst", np.double)]
             points = ["_x", "_y", "_score"]
@@ -143,7 +118,8 @@ class DLC:
                 dataset_name="dlc_processed",
                 dataset_type=np.dtype(joints_types),
             )
-
+            # TODO: remove sleep
+            time.sleep(1)
             self.exp.log_recording(dict(rec_aim='body',
                                         software='Ethopy',
                                         version='0.1',
@@ -151,6 +127,33 @@ class DLC:
                                         source_path=self.source_path,
                                         target_path=self.target_path 
                                         ))
+
+        self.dlc_live_process = mp.Process(
+            target=self.setup,
+            args=(self.frame_process, self.calibration_queue, self.frame_tmst),
+        )
+        self.dlc_live_process.start()
+
+
+    def setup(self, frame_process, calibration_queue, frame_tmst):
+        """
+        Perform DLC setup and initialization.
+
+        Args:
+            frame_process (mp.Queue): Queue for receiving video frames for processing.
+            calibration_queue (mp.Queue): Queue for sending calibration data.
+            frame_tmst (_type_): Timestamp data.
+        """
+        self.frame_process = frame_process
+        self.frame_tmst = frame_tmst
+        # find corners of the arena
+        calibration_queue.put(self.find_corners())
+
+        # initialize dlc models
+        self.dlc_live = DLCLive(self.path, processor=self.dlc_proc)
+        self.dlc_live.init_inference(self.frame_process.get()[1] / 255)
+
+        self.setup_ready.set()
 
         # start processing the camera frames
         self.process()
