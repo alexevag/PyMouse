@@ -222,8 +222,8 @@ class DLC:
 
         pts2 = np.float32([[0, 0], [screen_size, 0], [0, screen_size]])
 
-        m = getAffineTransform(pts1, pts2)
-        m_inv = invertAffineTransform(m)
+        m = getAffineTransform(pts1, pts2) # image to real
+        m_inv = invertAffineTransform(m) # real to image
         return m, m_inv
 
     def screen_dimensions(self, diagonal_inches, aspect_ratio=16 / 9):
@@ -420,7 +420,7 @@ class DLC:
                 p = self.dlc_live.get_pose(self.frame / 255)
                 # check if position need any intervation
                 self.curr_pose = self.update_position(p)
-                self.final_pose = self.get_position(self.curr_posem, tmst)
+                self.final_pose = self.get_position(self.curr_pose, tmst)
                 # save pose to the shared memory
                 self.data[:] = self.final_pose
                 # save in the hdf5 files
@@ -448,9 +448,13 @@ class DLC:
         )  # Assuming reference vector is [1, 0]
 
         centroid_triangle = np.dot(
-            self.M_inv,
+            self.M,
             np.array([centroid_triangle[0], centroid_triangle[1], 1]),
         )
+        # centroid_triangle = np.dot(
+        #     self.M,
+        #     np.array([pose[0, 0], pose[0, 1], 1]),
+        # )
         return centroid_triangle[0], centroid_triangle[1],tmst, angle
     
     def find_centroid(self, vertices):
