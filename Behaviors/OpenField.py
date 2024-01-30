@@ -69,13 +69,31 @@ class OpenField(Behavior, dj.Manual):
         self.camera_source_path = "/home/eflab/Desktop/PyMouse_latest/PyMouse/video/"
         self.camera_target_path = "/mnt/lab/data/OpenField/"
 
+        # create a queue that returns the arena cornerns
+        self.dlc_queue = mp.Queue(maxsize=1)
+        self.dlc_queue.cancel_join_thread()
+
+        # create a mp Queue for the communication of dlc and camera
+        self.process_q = mp.Queue(maxsize=2)
+        self.process_q.cancel_join_thread()
+
+        # return only x,t,tmst and angle
+        self.pose, self.sm = shared_memory_array(
+            name="pose",
+            rows_len=1,
+            columns_len=4,
+        )
+        self.shared_memory_shape = (1, 4)
+
+    def setup(self, exp):
+        super(OpenField, self).setup(exp)
+        
         # read camera parameters
         camera_params = self.logger.get(
             table="SetupConfiguration.Camera",
             key=f"setup_conf_idx={self.exp.params['setup_conf_idx']}",
             as_dict=True,
         )[0]
-
         # read screen parameters
         # screen_params = self.logger.get(
         #     table="SetupConfiguration.Screen",
@@ -89,32 +107,11 @@ class OpenField(Behavior, dj.Manual):
             [[self.screen_size, 0], [self.screen_size, self.screen_size]]
         )
         self.resolution = (camera_params["resolution_x"], camera_params["resolution_y"])
-
-        # create a queue that returns the arena cornerns
-        self.dlc_queue = mp.Queue(maxsize=1)
-        self.dlc_queue.cancel_join_thread()
-
-        # create a mp Queue for the communication of dlc and camera
-        self.process_q = mp.Queue(maxsize=2)
-        self.process_q.cancel_join_thread()
-
-        # create shared memory for the pose sharing between behaviour and dlc process
         self.all_joints_names = read_yalm(
-            path=self.self.exp.params["model_path"],
+            path=self.exp.params["model_path"],
             filename="pose_cfg.yaml",
             variable="all_joints_names",
         )
-
-        # return only x,t,tmst and angle
-        self.pose, self.sm = shared_memory_array(
-            name="pose",
-            rows_len=1,
-            columns_len=4,
-        )
-        self.shared_memory_shape = (1, 4)
-
-    def setup(self, exp):
-        super(OpenField, self).setup(exp)
 
         # start camera recording process
         self.animal_id = self.logger.trial_key["animal_id"]
@@ -137,7 +134,7 @@ class OpenField(Behavior, dj.Manual):
             self.exp,
             self.process_q,
             self.dlc_queue,
-            path=self.self.exp.params["model_path"],
+            path=self.exp.params["model_path"],
             shared_memory_shape=self.shared_memory_shape,
             logger=self.logger,
             joints=self.all_joints_names,
@@ -151,9 +148,6 @@ class OpenField(Behavior, dj.Manual):
             sys.stdout.flush()
             time.sleep(0.1)
 
-        corners_dist = np.linalg.norm(self.corners[0] - self.corners[1])
-        self.pixel_unit = self.screen_size / corners_dist
-
     def prepare(self, condition):
         self.logged_pos = False
         self.in_location = False
@@ -163,16 +157,16 @@ class OpenField(Behavior, dj.Manual):
         super().prepare(condition)
 
         # find real position of the objects
-        self.response_locs_p = self.screen_pos_to_real_pos(
+        self.response_locs = self.screen_pos_to_real_pos(
             self.curr_cond["response_loc_x"]
         )
-        self.rew_locs_p = self.screen_pos_to_real_pos((self.curr_cond["reward_loc_x"],))
+        self.rew_locs = self.screen_pos_to_real_pos((self.curr_cond["reward_loc_x"],))
 
         self.position_tmst = 0
         self.resp_position_idx = -1
 
     def is_ready_start(self):
-        x, y, tmst, angle = self.pose
+        x, y, tmst, angle = self.pose[0]
         r_x, r_y = self.curr_cond["init_loc_x"], self.curr_cond["init_loc_y"]
         return (
             np.sum((np.array([r_x, r_y]) - [x, y]) ** 2) ** 0.5
@@ -181,7 +175,7 @@ class OpenField(Behavior, dj.Manual):
 
     def in_response_loc(self):
         """check if the animal position has been in a specific location"""
-        self.x_cur, self.y_cur, self.tmst_cur, self.angle_cur = self.pose
+        self.x_cur, self.y_cur, self.tmst_cur, self.angle_cur = self.pose[0]
 
         # check if pos in response location
         self.resp_position_idx = self.position_in_radius(
