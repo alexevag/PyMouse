@@ -1,6 +1,7 @@
 from core.Logger import *
 import sys
 from utils.Start import *
+import traceback
 error = False
 
 global logger
@@ -14,6 +15,7 @@ while not logger.setup_status == 'exit':
         try:
             if logger.get_protocol(): exec(open(logger.get_protocol()).read())
         except Exception as e:
+            print(traceback.format_exc())
             error = e
             logger.update_setup_info({'state': 'ERROR!', 'notes': str(e), 'status': 'exit'})
         if logger.manual_run:  logger.update_setup_info({'status': 'exit'}); break
@@ -23,6 +25,6 @@ while not logger.setup_status == 'exit':
 
 # # # # # Exit # # # # #
 logger.cleanup()
-if error: print(error)
+if error: print(traceback.format_exc())
 sys.exit(0)
 
