@@ -106,8 +106,6 @@ class Trial(Experiment):
         self.response = self.beh.get_response(self.start_time)
         if self.beh.is_ready(self.curr_cond["trial_ready"]):
             self.resp_ready = True
-        if self.response:
-            print("self.response")
 
     def next(self):
         if self.beh.in_reward_loc() and self.resp_ready:  # correct response
