@@ -394,6 +394,8 @@ class WebCam(Camera):
                     if self.process_queue.full():
                         self.process_queue.get()
                     self.process_queue.put_nowait((tmst, image))
+        if not self.recording:
+            self.video_output.close()
 
     def stop_rec(self):
         """
@@ -409,9 +411,6 @@ class WebCam(Camera):
 
         # Call the superclass method to perform additional cleanup
         super().stop_rec()
-
-        # Close the video output stream
-        self.video_output.close()
 
         # Clear the recording flag
         self.recording.clear()
