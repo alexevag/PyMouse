@@ -57,12 +57,14 @@ class DLC:
         shared_memory_shape,
         logger,
         joints,
+        # beh_hash
     ):
         self.exp =exp
         self.path = path
         self.nose_y = 0
         self.theta = 0
         self.timestamp = 0
+        # self.beh_hash = beh_hash
 
         # attach another shared memory block
         self.sm = SharedMemory("pose")
@@ -76,7 +78,7 @@ class DLC:
         self.close = mp.Event()
         self.close.clear()
 
-        self.source_path = "/home/eflab/Desktop/PyMouse_latest/PyMouse/dlc/"
+        self.source_path = "/home/eflab/alex/PyMouse/dlc/"
         self.target_path = "/mnt/lab/data/OpenField/"
         self.joints = joints
         self.logger = logger
@@ -149,7 +151,8 @@ class DLC:
         self.corners = self.find_corners()
         self.M, self.M_inv = self.affine_transform(self.corners, self.screen_size)
         dlc_queue.put((self.M, self.M_inv))
-
+        # corner = {"beh_hash":self.beh_hash, "corners":self.corners, "affine_matrix":self.M}
+        # self.logger.log("OpenField.Corners", corner, schema="behavior")
         # initialize dlc models
         self.dlc_live = DLCLive(self.path, processor=self.dlc_proc)
         self.dlc_live.init_inference(self.frame_process.get()[1] / 255)
@@ -496,7 +499,7 @@ class DLC:
         self.sm.close()
         self.sm.unlink()
         self.logger.closeDatasets()
-        self.move_hdf()
+        # self.move_hdf()
         print("self.dlc_live_process.join()")
         self.dlc_live_process.terminate()
         print("self.dlc_live_process.join()")

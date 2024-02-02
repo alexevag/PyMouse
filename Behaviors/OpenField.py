@@ -54,11 +54,21 @@ class OpenField(Behavior, dj.Manual):
         radius                    : float
         """
 
+    class Corners(dj.Part):
+        definition = """
+        # reward port conditions
+        -> OpenField
+        ---
+        corners              : blob
+        affine_matrix        : blob
+        """
+
     cond_tables = [
         "OpenField",
         "OpenField.Response",
         "OpenField.Init",
         "OpenField.Reward",
+        "OpenField.Corners"
     ]
     required_fields = ["reward_loc_x", "reward_amount"]
     default_key = {"reward_type": "water", "response_port": 1, "reward_port": 1}
@@ -66,7 +76,7 @@ class OpenField(Behavior, dj.Manual):
     def __init__(self):
         # constant parameters
         self.model_columns_len = 3  # x,y,prediction confidence constant
-        self.camera_source_path = "/home/eflab/Desktop/PyMouse_latest/PyMouse/video/"
+        self.camera_source_path = "/home/eflab/alex/PyMouse/video/"
         self.camera_target_path = "/mnt/lab/data/OpenField/"
 
         # create a queue that returns the arena cornerns
@@ -138,6 +148,7 @@ class OpenField(Behavior, dj.Manual):
             shared_memory_shape=self.shared_memory_shape,
             logger=self.logger,
             joints=self.all_joints_names,
+            # beh_hash=self.curr_cond['beh_hash']
         )
 
         # wait until the dlc setup has finished initialization before start the experiment
