@@ -383,9 +383,8 @@ class WebCam(Camera):
         while not self.stop.is_set():
             check, image = self.get_frame()
             # tmst = self.logger_timer.elapsed_time()
-            tmst = first_tmst + (cam_tmst_first-self.camera.get(cv2.CAP_PROP_POS_MSEC))
+            tmst = first_tmst + (self.camera.get(cv2.CAP_PROP_POS_MSEC)-cam_tmst_first)
             self.iframe += 1
-
             if check:
                 self.frame_queue.put_nowait((tmst, image))
                 # Check if a separate process queue is provided
@@ -394,6 +393,7 @@ class WebCam(Camera):
                     if self.process_queue.full():
                         self.process_queue.get()
                     self.process_queue.put_nowait((tmst, image))
+            time.sleep(1)
         if not self.recording:
             self.video_output.close()
 
