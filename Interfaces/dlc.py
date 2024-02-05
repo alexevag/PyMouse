@@ -150,9 +150,7 @@ class DLC:
         # find corners of the arena
         self.corners = self.find_corners()
         self.M, self.M_inv = self.affine_transform(self.corners, self.screen_size)
-        dlc_queue.put((self.M, self.M_inv))
-        # corner = {"beh_hash":self.beh_hash, "corners":self.corners, "affine_matrix":self.M}
-        # self.logger.log("OpenField.Corners", corner, schema="behavior")
+        dlc_queue.put((self.M, self.corners))
         # initialize dlc models
         self.dlc_live = DLCLive(self.path, processor=self.dlc_proc)
         self.dlc_live.init_inference(self.frame_process.get()[1] / 255)
@@ -499,7 +497,7 @@ class DLC:
         self.sm.close()
         self.sm.unlink()
         self.logger.closeDatasets()
-        # self.move_hdf()
+        self.move_hdf()
         print("self.dlc_live_process.join()")
         self.dlc_live_process.terminate()
         print("self.dlc_live_process.join()")

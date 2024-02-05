@@ -54,21 +54,11 @@ class OpenField(Behavior, dj.Manual):
         radius                    : float
         """
 
-    class Corners(dj.Part):
-        definition = """
-        # reward port conditions
-        -> OpenField
-        ---
-        corners              : blob
-        affine_matrix        : blob
-        """
-
     cond_tables = [
         "OpenField",
         "OpenField.Response",
         "OpenField.Init",
         "OpenField.Reward",
-        "OpenField.Corners"
     ]
     required_fields = ["reward_loc_x", "reward_amount"]
     default_key = {"reward_type": "water", "response_port": 1, "reward_port": 1}
@@ -97,7 +87,7 @@ class OpenField(Behavior, dj.Manual):
 
     def setup(self, exp):
         super(OpenField, self).setup(exp)
-        
+
         # read camera parameters
         camera_params = self.logger.get(
             table="SetupConfiguration.Camera",
@@ -158,6 +148,10 @@ class OpenField(Behavior, dj.Manual):
             )
             sys.stdout.flush()
             time.sleep(0.1)
+        # save the corners/position
+        self.M, self.corners = self.dlc_queue.get()
+        self.exp.params["corners"] = self.corners
+        self.exp.params["affine_matrix"] = self.M
 
     def prepare(self, condition):
         self.logged_pos = False

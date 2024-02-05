@@ -30,6 +30,7 @@ class Condition(dj.Manual):
         reward_duration             : int
         punish_duration             : int
         abort_duration              : int
+        corners                     : blob
         """
 
 
@@ -54,6 +55,7 @@ class Experiment(State, ExperimentClass):
         "reward_duration": 500,
         "punish_duration": 1000,
         "abort_duration": 0,
+        "corners": [[0,0,0],[0,0,0],[0,0,0],[0,0,0]]
     }
 
     def entry(self):
