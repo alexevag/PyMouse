@@ -190,7 +190,7 @@ class Logger:
                                          self.trial_key['session'],
                                          datetime.now().strftime("%Y-%m-%d-%H-%M-%S"))
         self.datasets[dataset_name] = self.Writer(path + filename, target_path)
-        self.datasets[dataset_name].createDataset(dataset_name, shape=(len(dataset_type.names),), dtype=dataset_type)
+        self.datasets[dataset_name].createDataset(dataset_name, shape=(1,), dtype=dataset_type)
         return filename, self.datasets[dataset_name]
 
     def closeDatasets(self):
