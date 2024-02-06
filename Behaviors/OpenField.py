@@ -138,7 +138,6 @@ class OpenField(Behavior, dj.Manual):
             shared_memory_shape=self.shared_memory_shape,
             logger=self.logger,
             joints=self.all_joints_names,
-            # beh_hash=self.curr_cond['beh_hash']
         )
 
         # wait until the dlc setup has finished initialization before start the experiment
@@ -149,9 +148,13 @@ class OpenField(Behavior, dj.Manual):
             sys.stdout.flush()
             time.sleep(0.1)
         # save the corners/position
-        self.M, self.corners = self.dlc_queue.get()
-        self.exp.params["corners"] = self.corners
-        self.exp.params["affine_matrix"] = self.M
+        self.affine_matrix, self.corners = self.dlc_queue.get()
+        arena = {"affine_matrix": self.affine_matrix, "corners": self.corners}
+        self.logger.put(
+            table="Configuration.Arena",
+            tuple={**arena, **self.logger.trial_key},
+            schema="behavior",
+        )
 
     def prepare(self, condition):
         self.logged_pos = False
@@ -171,7 +174,7 @@ class OpenField(Behavior, dj.Manual):
         self.resp_position_idx = -1
 
     def is_ready_start(self):
-        x, y, tmst, angle = self.pose[0]
+        tmst, x, y, angle = self.pose[0]
         r_x, r_y = self.curr_cond["init_loc_x"], self.curr_cond["init_loc_y"]
         return (
             np.sum((np.array([r_x, r_y]) - [x, y]) ** 2) ** 0.5
@@ -180,8 +183,8 @@ class OpenField(Behavior, dj.Manual):
 
     def in_response_loc(self):
         """check if the animal position has been in a specific location"""
-        self.x_cur, self.y_cur, self.tmst_cur, self.angle_cur = self.pose[0]
-
+        self.tmst_cur, self.x_cur, self.y_cur, self.angle_cur = self.pose[0]
+        # print("self.tmst_cur ", self.tmst_cur)
         # check if pos in response location
         self.resp_position_idx = self.position_in_radius(
             [self.x_cur, self.y_cur], self.response_locs, self.curr_cond["radius"]

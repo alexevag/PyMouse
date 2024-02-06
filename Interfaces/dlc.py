@@ -59,7 +59,7 @@ class DLC:
         joints,
         # beh_hash
     ):
-        self.exp =exp
+        self.exp = exp
         self.path = path
         self.nose_y = 0
         self.theta = 0
@@ -101,6 +101,20 @@ class DLC:
 
         self.frame = None
 
+        self.dlc_live_process = mp.Process(
+            target=self.setup,
+            args=(self.frame_process, self.dlc_queue),
+        )
+        self.dlc_live_process.start()
+
+    def setup(self, frame_process, dlc_queue):
+        """
+        Perform DLC setup and initialization.
+
+        Args:
+            frame_process (mp.Queue): Queue for receiving video frames for processing.
+            dlc_queue (mp.Queue): Queue for sending calibration data.
+        """
         if self.logger is not None:
             joints_types = [("tmst", np.double)]
             points = ["_x", "_y", "_score"]
@@ -115,37 +129,32 @@ class DLC:
                 dataset_type=np.dtype(joints_types),
             )
 
+            joints_types_processed = [
+                ("tmst", np.double),
+                ("head_x", np.double),
+                ("head_y", np.double),
+                ("angle", np.double),
+            ]
+            
             filename_dlc, self.pose_hdf5_processed = self.logger.createDataset(
                 self.source_path,
                 self.target_path,
                 dataset_name="dlc_processed",
-                dataset_type=np.dtype(joints_types),
+                dataset_type=np.dtype(joints_types_processed),
             )
             # TODO: remove sleep
             time.sleep(1)
-            self.exp.log_recording(dict(rec_aim='body',
-                                        software='Ethopy',
-                                        version='0.1',
-                                        filename=filename_dlc,
-                                        source_path=self.source_path,
-                                        target_path=self.target_path 
-                                        ))
+            self.exp.log_recording(
+                dict(
+                    rec_aim="body",
+                    software="Ethopy",
+                    version="0.1",
+                    filename=filename_dlc,
+                    source_path=self.source_path,
+                    target_path=self.target_path,
+                )
+            )
 
-        self.dlc_live_process = mp.Process(
-            target=self.setup,
-            args=(self.frame_process, self.dlc_queue),
-        )
-        self.dlc_live_process.start()
-
-
-    def setup(self, frame_process, dlc_queue):
-        """
-        Perform DLC setup and initialization.
-
-        Args:
-            frame_process (mp.Queue): Queue for receiving video frames for processing.
-            dlc_queue (mp.Queue): Queue for sending calibration data.
-        """
         self.frame_process = frame_process
         # find corners of the arena
         self.corners = self.find_corners()
@@ -189,8 +198,10 @@ class DLC:
         while len(corners) < 4:
             _, _frame = self.frame_process.get()
             pose = dlc_live.get_pose(_frame / 255)
-            # print("pose " , pose)
-            # print("pose[:,2]  ", pose[:,2])
+            sys.stdout.write(
+                "\rWait for high confidence corners" + "." * (int(time.time()) % 4)
+            )
+            sys.stdout.flush()
             if np.all(pose[:, 2] > 0.85):
                 corners.append(dlc_live.get_pose(_frame / 255))
         corners = np.mean(np.array(corners), axis=0)
@@ -223,8 +234,8 @@ class DLC:
 
         pts2 = np.float32([[0, 0], [screen_size, 0], [0, screen_size]])
 
-        m = getAffineTransform(pts1, pts2) # image to real
-        m_inv = invertAffineTransform(m) # real to image
+        m = getAffineTransform(pts1, pts2)  # image to real
+        m_inv = invertAffineTransform(m)  # real to image
         return m, m_inv
 
     def screen_dimensions(self, diagonal_inches, aspect_ratio=16 / 9):
@@ -398,9 +409,10 @@ class DLC:
                 p = self.dlc_live.get_pose(self.frame / 255)
                 scores = np.array(p[0:4][:, 2])
                 sys.stdout.write(
-                    "\rWait for high confidence" + "." * (int(time.time()) % 4)
+                    "\rWait for high confidence pose" + "." * (int(time.time()) % 4)
                 )
                 sys.stdout.flush()
+                print("scores  ", scores)
                 if len(np.where(scores >= threshold)[0]) == 3:
                     self.curr_pose = p
                     high_conf_points = True
@@ -417,6 +429,7 @@ class DLC:
         while not self.close.is_set() or self.frame_process.qsize() > 0:
             if self.frame_process.qsize() > 0:
                 tmst, self.frame = self.frame_process.get()
+                # print("tmst ", tmst)
                 # get pose froma frame
                 p = self.dlc_live.get_pose(self.frame / 255)
                 # check if position need any intervation
@@ -425,10 +438,11 @@ class DLC:
                 # save pose to the shared memory
                 self.data[:] = self.final_pose
                 # save in the hdf5 files
+                print("pose ", np.insert(np.double(p.ravel()), 0, tmst))
                 self.pose_hdf5.append("dlc", np.insert(np.double(p.ravel()), 0, tmst))
                 self.pose_hdf5_processed.append(
                     "dlc_processed",
-                    np.insert(np.double(self.curr_pose.ravel()), 0, tmst),
+                    self.final_pose,
                 )
             else:
                 time.sleep(0.001)
@@ -456,8 +470,8 @@ class DLC:
         #     self.M,
         #     np.array([pose[0, 0], pose[0, 1], 1]),
         # )
-        return centroid_triangle[0], centroid_triangle[1],tmst, angle
-    
+        return tmst, centroid_triangle[0], centroid_triangle[1], angle
+
     def find_centroid(self, vertices):
         return np.mean(vertices, axis=0)
 

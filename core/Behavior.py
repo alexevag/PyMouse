@@ -170,6 +170,14 @@ class Configuration(dj.Manual):
         discription              : varchar(256)
         """
 
+    class Arena(dj.Part):
+        definition = """
+        # Arena position
+        -> Configuration
+        ---
+        corners                  : blob             # corners position
+        affine_matrix            : blob             # affine matrix from image to real space
+        """
 
 @behavior.schema
 class BehCondition(dj.Manual):

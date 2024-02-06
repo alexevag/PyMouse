@@ -378,12 +378,12 @@ class WebCam(Camera):
         doesn't exceed its maximum size. We need for the process_queue(size:2) the latest image
         so if it is full get a frame and put the latest one.
         """
-        first_tmst = self.logger_timer.elapsed_time()
-        cam_tmst_first = self.camera.get(cv2.CAP_PROP_POS_MSEC)
+        # first_tmst = self.logger_timer.elapsed_time()
+        # cam_tmst_first = self.camera.get(cv2.CAP_PROP_POS_MSEC)
         while not self.stop.is_set():
             check, image = self.get_frame()
-            # tmst = self.logger_timer.elapsed_time()
-            tmst = first_tmst + (self.camera.get(cv2.CAP_PROP_POS_MSEC)-cam_tmst_first)
+            tmst = self.logger_timer.elapsed_time()
+            # tmst = first_tmst + (self.camera.get(cv2.CAP_PROP_POS_MSEC)-cam_tmst_first)
             self.iframe += 1
             if check:
                 self.frame_queue.put_nowait((tmst, image))
@@ -393,7 +393,6 @@ class WebCam(Camera):
                     if self.process_queue.full():
                         self.process_queue.get()
                     self.process_queue.put_nowait((tmst, image))
-            time.sleep(1)
         if not self.recording:
             self.video_output.close()
 
