@@ -142,27 +142,27 @@ class DLC:
             )
             # TODO: remove sleep
             time.sleep(1)
-            key = dict(
-                rec_aim="body",
-                software="Ethopy",
-                version="0.1",
-                filename=filename_dlc,
-                source_path=self.source_path,
-                target_path=self.target_path,
-            )
-            recs = self.logger.get(
-                schema="recording",
-                table="Recording",
-                key=self.logger.trial_key,
-                fields=["rec_idx"],
-            )
-            rec_idx = 1 if len(recs) == 0 else max(recs) + 1
-            self.logger.log(
-                "Recording",
-                data={**key, "rec_idx": rec_idx},
-                schema="recording",
-                priority=20,
-            )
+            # key = dict(
+            #     rec_aim="body",
+            #     software="Ethopy",
+            #     version="0.1",
+            #     filename=filename_dlc,
+            #     source_path=self.source_path,
+            #     target_path=self.target_path,
+            # )
+            # recs = self.logger.get(
+            #     schema="recording",
+            #     table="Recording",
+            #     key=self.logger.trial_key,
+            #     fields=["rec_idx"],
+            # )
+            # rec_idx = 1 if len(recs) == 0 else max(recs) + 1
+            # self.logger.log(
+            #     "Recording",
+            #     data={**key, "rec_idx": rec_idx},
+            #     schema="recording",
+            #     priority=20,
+            # )
 
         self.frame_process = frame_process
         # find corners of the arena
@@ -447,7 +447,7 @@ class DLC:
                 # save pose to the shared memory
                 self.data[:] = self.final_pose
                 # save in the hdf5 files
-                print("pose ", np.insert(np.double(p.ravel()), 0, tmst))
+                # print("pose ", np.insert(np.double(p.ravel()), 0, tmst))
                 self.pose_hdf5.append("dlc", np.insert(np.double(p.ravel()), 0, tmst))
                 self.pose_hdf5_processed.append(
                     "dlc_processed",
