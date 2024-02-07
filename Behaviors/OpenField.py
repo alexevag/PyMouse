@@ -131,7 +131,6 @@ class OpenField(Behavior, dj.Manual):
 
         # start DLC process
         self.dlc = DLC(
-            self.exp,
             self.process_q,
             self.dlc_queue,
             path=self.exp.params["model_path"],

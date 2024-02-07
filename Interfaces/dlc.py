@@ -50,7 +50,6 @@ class DLC:
 
     def __init__(
         self,
-        exp,
         frame_process,
         dlc_queue,
         path: str,
@@ -59,7 +58,6 @@ class DLC:
         joints,
         # beh_hash
     ):
-        self.exp = exp
         self.path = path
         self.nose_y = 0
         self.theta = 0
@@ -135,7 +133,7 @@ class DLC:
                 ("head_y", np.double),
                 ("angle", np.double),
             ]
-            
+
             filename_dlc, self.pose_hdf5_processed = self.logger.createDataset(
                 self.source_path,
                 self.target_path,
@@ -144,15 +142,26 @@ class DLC:
             )
             # TODO: remove sleep
             time.sleep(1)
-            self.exp.log_recording(
-                dict(
-                    rec_aim="body",
-                    software="Ethopy",
-                    version="0.1",
-                    filename=filename_dlc,
-                    source_path=self.source_path,
-                    target_path=self.target_path,
-                )
+            key = dict(
+                rec_aim="body",
+                software="Ethopy",
+                version="0.1",
+                filename=filename_dlc,
+                source_path=self.source_path,
+                target_path=self.target_path,
+            )
+            recs = self.logger.get(
+                schema="recording",
+                table="Recording",
+                key=self.logger.trial_key,
+                fields=["rec_idx"],
+            )
+            rec_idx = 1 if len(recs) == 0 else max(recs) + 1
+            self.logger.log(
+                "Recording",
+                data={**key, "rec_idx": rec_idx},
+                schema="recording",
+                priority=20,
             )
 
         self.frame_process = frame_process
