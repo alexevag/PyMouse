@@ -121,7 +121,7 @@ class Camera:
                 rec_aim="openfield",
                 software="EthoPy",
                 version="0.1",
-                filename=self.filename,
+                filename=self.filename+".mp4",
                 source_path=self.source_path,
                 target_path=self.target_path,
             )
@@ -218,7 +218,7 @@ class Camera:
                 self.write_frame(frame_queue.get())
             else:
                 time.sleep(0.01)
-
+            
     def stop_rec(self):
         """
         Stop video recording.
@@ -393,8 +393,6 @@ class WebCam(Camera):
                     if self.process_queue.full():
                         self.process_queue.get()
                     self.process_queue.put_nowait((tmst, image))
-        if not self.recording:
-            self.video_output.close()
 
     def stop_rec(self):
         """
@@ -410,6 +408,8 @@ class WebCam(Camera):
 
         # Call the superclass method to perform additional cleanup
         super().stop_rec()
+
+        self.video_output.close()
 
         # Clear the recording flag
         self.recording.clear()
