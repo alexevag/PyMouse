@@ -456,7 +456,7 @@ class DLC:
                 # save in the hdf5 files
                 # print("pose ", np.insert(np.double(p.ravel()), 0, tmst))
                 self.pose_hdf5.append("dlc", np.insert(np.double(p.ravel()), 0, tmst))
-                self.pose_hdf5.append("dlc_infer", np.insert(np.double(self.curr_pose.ravel()), 0, tmst))
+                self.pose_hdf5_infer.append("dlc_infer", np.insert(np.double(self.curr_pose.ravel()), 0, tmst))
                 self.pose_hdf5_processed.append(
                     "dlc_processed",
                     self.final_pose,
