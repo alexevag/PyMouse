@@ -127,6 +127,13 @@ class DLC:
                 dataset_type=np.dtype(joints_types),
             )
 
+            _, self.pose_hdf5_infer = self.logger.createDataset(
+                self.source_path,
+                self.target_path,
+                dataset_name="dlc_infer",
+                dataset_type=np.dtype(joints_types),
+            )
+
             joints_types_processed = [
                 ("tmst", np.double),
                 ("head_x", np.double),
@@ -365,7 +372,7 @@ class DLC:
         )
         return missing_point
 
-    def update_position(self, pose, threshold=0.85):
+    def update_position(self, pose, threshold=0.75):
         """
         Update the position based on the confidence of detected body parts.
 
@@ -449,6 +456,7 @@ class DLC:
                 # save in the hdf5 files
                 # print("pose ", np.insert(np.double(p.ravel()), 0, tmst))
                 self.pose_hdf5.append("dlc", np.insert(np.double(p.ravel()), 0, tmst))
+                self.pose_hdf5.append("dlc_infer", np.insert(np.double(self.curr_pose.ravel()), 0, tmst))
                 self.pose_hdf5_processed.append(
                     "dlc_processed",
                     self.final_pose,
