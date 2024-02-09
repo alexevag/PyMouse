@@ -86,7 +86,7 @@ class SerialPorts(Interface):
             port: Port object representing the target port.
             duration: Duration of the liquid pulse in milliseconds.
         """
-        # TODO: use a port and fint the serial connection based on the dictionary
+        # TODO: use a port and find the serial connection based on the dictionary
         self.channels["Liquid"][port](True)
         time.sleep(duration / 1000)
         self.channels["Liquid"][port](False)
