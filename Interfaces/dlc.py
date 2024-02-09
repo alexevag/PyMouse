@@ -383,7 +383,7 @@ class DLC:
         Returns:
             np.ndarray: Updated pose information.
         """
-        scores = np.array(pose[0:4][:, 2])
+        scores = np.array(pose[:3][:, 2])
         high_conf_bdparts = np.where(scores >= threshold)[0]
         len_high_conf_bdparts = len(high_conf_bdparts)
 
@@ -391,8 +391,8 @@ class DLC:
             # if more than one point missing do not update pose
             pose = self.curr_pose
         elif len_high_conf_bdparts == 2:
-            curr_pose = np.array(self.curr_pose[0:4, 0:2])
-            body_parts = np.array(pose[0:4, 0:2])
+            curr_pose = np.array(self.curr_pose[:3, :2])
+            body_parts = np.array(pose[:3, :2])
             order_points_prev = np.append(
                 curr_pose[high_conf_bdparts],
                 curr_pose[np.where(scores < threshold)[0]],
@@ -407,7 +407,7 @@ class DLC:
                 order_points_prev, order_points_new
             )
             order_points_new[np.where(scores < threshold)[0]] = missing_point
-            pose[0:4, 0:2] = order_points_new
+            pose[:3, :2] = order_points_new
 
         return pose
 
@@ -423,7 +423,7 @@ class DLC:
             if self.frame_process.qsize() > 0:
                 _, self.frame = self.frame_process.get()
                 p = self.dlc_live.get_pose(self.frame / 255)
-                scores = np.array(p[0:4][:, 2])
+                scores = np.array(p[0:3][:, 2])
                 sys.stdout.write(
                     "\rWait for high confidence pose" + "." * (int(time.time()) % 4)
                 )
@@ -456,7 +456,9 @@ class DLC:
                 # save in the hdf5 files
                 # print("pose ", np.insert(np.double(p.ravel()), 0, tmst))
                 self.pose_hdf5.append("dlc", np.insert(np.double(p.ravel()), 0, tmst))
-                self.pose_hdf5.append("dlc_infer", np.insert(np.double(self.curr_pose.ravel()), 0, tmst))
+                self.pose_hdf5.append(
+                    "dlc_infer", np.insert(np.double(self.curr_pose.ravel()), 0, tmst)
+                )
                 self.pose_hdf5_processed.append(
                     "dlc_processed",
                     self.final_pose,
