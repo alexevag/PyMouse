@@ -67,7 +67,7 @@ class DLC:
         # attach another shared memory block
         self.sm = SharedMemory("pose")
         # create a new numpy array that uses the shared memory
-        self.data = np.ndarray(
+        self._dlc_pose = np.ndarray(
             shared_memory_shape, dtype=np.float32, buffer=self.sm.buf
         )
 
@@ -85,8 +85,6 @@ class DLC:
         self.screen_pos = np.array(
             [[self.screen_size, 0], [self.screen_size, self.screen_size]]
         )
-
-        self.curr_pose = np.zeros((3, 3))
 
         self.frame_process = frame_process
         self.dlc_queue = dlc_queue
@@ -147,29 +145,6 @@ class DLC:
                 dataset_name="dlc_processed",
                 dataset_type=np.dtype(joints_types_processed),
             )
-            # TODO: remove sleep
-            time.sleep(1)
-            # key = dict(
-            #     rec_aim="body",
-            #     software="Ethopy",
-            #     version="0.1",
-            #     filename=filename_dlc,
-            #     source_path=self.source_path,
-            #     target_path=self.target_path,
-            # )
-            # recs = self.logger.get(
-            #     schema="recording",
-            #     table="Recording",
-            #     key=self.logger.trial_key,
-            #     fields=["rec_idx"],
-            # )
-            # rec_idx = 1 if len(recs) == 0 else max(recs) + 1
-            # self.logger.log(
-            #     "Recording",
-            #     data={**key, "rec_idx": rec_idx},
-            #     schema="recording",
-            #     priority=20,
-            # )
 
         self.frame_process = frame_process
         # find corners of the arena
@@ -372,7 +347,7 @@ class DLC:
         )
         return missing_point
 
-    def update_position(self, pose, threshold=0.75):
+    def update_position(self, pose, prev_pose,tmst, threshold=0.85):
         """
         Update the position based on the confidence of detected body parts.
 
@@ -389,10 +364,12 @@ class DLC:
 
         if len_high_conf_bdparts < 2:
             # if more than one point missing do not update pose
-            pose = self.curr_pose
+            pose = prev_pose
         elif len_high_conf_bdparts == 2:
-            curr_pose = np.array(self.curr_pose[:3, :2])
+            curr_pose = np.array(prev_pose[:3, :2])
             body_parts = np.array(pose[:3, :2])
+
+            # put the low confidence bodypart late
             order_points_prev = np.append(
                 curr_pose[high_conf_bdparts],
                 curr_pose[np.where(scores < threshold)[0]],
@@ -406,6 +383,7 @@ class DLC:
             missing_point = self.infer_missing_point(
                 order_points_prev, order_points_new
             )
+            # update only the low confidence part
             body_parts[np.where(scores < threshold)[0]] = missing_point
             pose[:3, :2] = body_parts
 
@@ -430,46 +408,48 @@ class DLC:
                 sys.stdout.flush()
                 print("scores  ", scores)
                 if len(np.where(scores >= threshold)[0]) == 3:
-                    self.curr_pose = p
+                    curr_pose = p
                     high_conf_points = True
                 time.sleep(0.1)
-
+        return curr_pose
+    
     def process(self):
         """
         Run on a different process, wait to take an image, and return it.
         """
         # wait until a frame has all the 3 head point(nose and ear left/right)
-        self.init_curr_pos()
+        prev_pose = self.init_curr_pos()
 
         # run until close flag is set and frame_process is empty
         while not self.close.is_set() or self.frame_process.qsize() > 0:
             if self.frame_process.qsize() > 0:
                 tmst, self.frame = self.frame_process.get()
-                # print("tmst ", tmst)
-                # get pose froma frame
+
+                # get pose from frame
                 dlc_pose_raw = self.dlc_live.get_pose(self.frame / 255)
+                self.pose_hdf5.append("dlc", np.insert(np.double(dlc_pose_raw.ravel()), 0, tmst))
                 # check if position need any intervation
-                self.curr_pose = self.update_position(dlc_pose_raw)
-                final_pose = self.get_position(self.curr_pose, tmst)
+                curr_pose = self.update_position(dlc_pose_raw, prev_pose, tmst)
+                final_pose = self.get_position(curr_pose, tmst)
                 # save pose to the shared memory
-                self.data[:] = final_pose
+                self._dlc_pose[:] = final_pose
                 # save in the hdf5 files
                 # print("pose ", np.insert(np.double(p.ravel()), 0, tmst))
-                self.pose_hdf5.append("dlc", np.insert(np.double(dlc_pose_raw.ravel()), 0, tmst))
                 self.pose_hdf5_infer.append(
-                    "dlc_infer", np.insert(np.double(self.curr_pose.ravel()), 0, tmst)
+                    "dlc_infer", np.insert(np.double(curr_pose.ravel()), 0, tmst)
                 )
                 self.pose_hdf5_processed.append(
                     "dlc_processed",
                     final_pose,
                 )
+                prev_pose = curr_pose
             else:
                 time.sleep(0.001)
 
     def get_position(self, pose, tmst):
-        # Example coordinates for triangle vertices and square vertices
-        # pose[0]->nose, pose[1]->ear_left, pose[2]->ear_right
-
+        """Example coordinates for triangle vertices and square vertices
+        pose[0]->nose, pose[1]->ear_left, pose[2]->ear_right
+        """
         triangle_vertices = np.array(pose[0:3, 0:2])
 
         # Step 1: Find the centroid of the triangle
