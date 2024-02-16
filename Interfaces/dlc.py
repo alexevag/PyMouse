@@ -450,9 +450,9 @@ class DLC:
                 dlc_pose_raw = self.dlc_live.get_pose(self.frame / 255)
                 # check if position need any intervation
                 self.curr_pose = self.update_position(dlc_pose_raw)
-                self.final_pose = self.get_position(self.curr_pose, tmst)
+                final_pose = self.get_position(self.curr_pose, tmst)
                 # save pose to the shared memory
-                self.data[:] = self.final_pose
+                self.data[:] = final_pose
                 # save in the hdf5 files
                 # print("pose ", np.insert(np.double(p.ravel()), 0, tmst))
                 self.pose_hdf5.append("dlc", np.insert(np.double(dlc_pose_raw.ravel()), 0, tmst))
@@ -461,7 +461,7 @@ class DLC:
                 )
                 self.pose_hdf5_processed.append(
                     "dlc_processed",
-                    self.final_pose,
+                    final_pose,
                 )
             else:
                 time.sleep(0.001)
