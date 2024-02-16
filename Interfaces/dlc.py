@@ -447,15 +447,15 @@ class DLC:
                 tmst, self.frame = self.frame_process.get()
                 # print("tmst ", tmst)
                 # get pose froma frame
-                p = self.dlc_live.get_pose(self.frame / 255)
+                dlc_pose_raw = self.dlc_live.get_pose(self.frame / 255)
                 # check if position need any intervation
-                self.curr_pose = self.update_position(p)
+                self.curr_pose = self.update_position(dlc_pose_raw)
                 self.final_pose = self.get_position(self.curr_pose, tmst)
                 # save pose to the shared memory
                 self.data[:] = self.final_pose
                 # save in the hdf5 files
                 # print("pose ", np.insert(np.double(p.ravel()), 0, tmst))
-                self.pose_hdf5.append("dlc", np.insert(np.double(p.ravel()), 0, tmst))
+                self.pose_hdf5.append("dlc", np.insert(np.double(dlc_pose_raw.ravel()), 0, tmst))
                 self.pose_hdf5_infer.append(
                     "dlc_infer", np.insert(np.double(self.curr_pose.ravel()), 0, tmst)
                 )
