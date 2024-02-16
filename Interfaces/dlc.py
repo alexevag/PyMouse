@@ -406,8 +406,8 @@ class DLC:
             missing_point = self.infer_missing_point(
                 order_points_prev, order_points_new
             )
-            order_points_new[np.where(scores < threshold)[0]] = missing_point
-            pose[:3, :2] = order_points_new
+            body_parts[np.where(scores < threshold)[0]] = missing_point
+            pose[:3, :2] = body_parts
 
         return pose
 
