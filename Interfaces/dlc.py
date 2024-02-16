@@ -470,7 +470,7 @@ class DLC:
         # Example coordinates for triangle vertices and square vertices
         # pose[0]->nose, pose[1]->ear_left, pose[2]->ear_right
 
-        triangle_vertices = np.array(pose[0:4, 0:2])
+        triangle_vertices = np.array(pose[0:3, 0:2])
 
         # Step 1: Find the centroid of the triangle
         centroid_triangle = self.find_centroid(triangle_vertices)
