@@ -348,7 +348,7 @@ class DLC:
         return missing_point
 
 
-    def update_position(self, pose, prev_pose, threshold=0.99):
+    def update_position(self, pose, prev_pose, threshold=0.97):
         """
         Update the position based on the confidence of detected body parts.
 
@@ -390,7 +390,7 @@ class DLC:
 
         return pose
 
-    def init_curr_pos(self, threshold=0.95): 
+    def init_curr_pos(self, threshold=0.95):
         """
         Wait for the first pose with three high-confidence points in the head of the animal.
 
