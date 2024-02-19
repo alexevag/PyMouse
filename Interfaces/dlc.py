@@ -347,7 +347,8 @@ class DLC:
         )
         return missing_point
 
-    def update_position(self, pose, prev_pose,tmst, threshold=0.99):
+
+    def update_position(self, pose, prev_pose, threshold=0.99):
         """
         Update the position based on the confidence of detected body parts.
 
@@ -429,7 +430,7 @@ class DLC:
                 dlc_pose_raw = self.dlc_live.get_pose(self.frame / 255)
                 self.pose_hdf5.append("dlc", np.insert(np.double(dlc_pose_raw.ravel()), 0, tmst))
                 # check if position need any intervation
-                curr_pose = self.update_position(dlc_pose_raw, prev_pose, tmst)
+                curr_pose = self.update_position(dlc_pose_raw, prev_pose)
                 final_pose = self.get_position(curr_pose, tmst)
                 # save pose to the shared memory
                 self._dlc_pose[:] = final_pose
