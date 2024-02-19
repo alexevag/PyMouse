@@ -68,7 +68,7 @@ class SerialPorts(Interface):
             for channel in self.channels["Lick"]:
                 if self.channels["Lick"][channel]() is True:
                     self._lick_port_activated(channel)
-            time.sleep(0.05)
+            time.sleep(0.035)
 
     def _lick_port_activated(self, port):
         """Handle activation of the lick port and log the corresponding activity."""
