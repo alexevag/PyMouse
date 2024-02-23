@@ -62,7 +62,7 @@ class DLC:
         self.nose_y = 0
         self.theta = 0
         self.timestamp = 0
-        # self.beh_hash = beh_hash
+        self.rot_angle = self.calculate_rotation_angle(side=1, base=0.8)
 
         # attach another shared memory block
         self.sm = SharedMemory("pose")
@@ -248,105 +248,89 @@ class DLC:
 
         return x_cm, y_cm
 
-    def check_pred_confidence(self, scores, threshold=0.7):
+    def rotate_point(self, origin, point, angle_rad):
         """
-        Check the prediction confidence for every point and
-        return the points with high confidence.
+        Rotate a point by a given angle around a given origin.
 
-        Args:
-            scores (np.ndarray): Confidence scores for each point.
-            threshold (float, optional): Confidence threshold. Defaults to 0.7.
+        Parameters:
+        origin (tuple): The coordinates of the origin point (O).
+        point (tuple): The coordinates of the point to rotate (A).
+        angle (float): The angle of rotation in radians.
 
         Returns:
-            np.ndarray: Indices of points with confidence below the threshold.
+        tuple: The coordinates of the rotated point (A').
         """
-        return np.where(scores <= threshold)[0]
+        # Calculate the vector from the origin to the point
+        vector_OA = np.array(point) - np.array(origin)
 
-    def rotate_vector(self, vector, angle):
-        """
-        Rotate a 2D vector by a given angle.
-
-        Args:
-            vector (np.ndarray): Input vector.
-            angle (float): Rotation angle in radians.
-
-        Returns:
-            np.ndarray: Rotated vector.
-        """
+        # Calculate the components of the rotation matrix
         rotation_matrix = np.array(
-            [[np.cos(angle), -np.sin(angle)], [np.sin(angle), np.cos(angle)]]
+            [
+                [np.cos(angle_rad), -np.sin(angle_rad)],
+                [np.sin(angle_rad), np.cos(angle_rad)],
+            ]
         )
-        rotated_vector = np.dot(rotation_matrix, vector)
-        return rotated_vector
 
-    def find_midpoint(self, point1, point2):
+        # Apply rotation matrix to the vector
+        rotated_vector = np.dot(rotation_matrix, vector_OA)
+
+        # Calculate the new position of the rotated point
+        return tuple(np.array(origin) + rotated_vector)
+
+    def infer_apex(self, vertex1, vertex2, scaling_factor=0.8):
         """
-        Find the midpoint between two points.
+        Infer the coordinates of the apex in an isosceles triangle given two vertices.
 
-        Args:
-            point1 (np.ndarray): First point.
-            point2 (np.ndarray): Second point.
+        Parameters:
+        vertex1 (tuple): The coordinates of the first vertex.
+        vertex2 (tuple): The coordinates of the second vertex.
+        scaling_factor (float): Scaling factor for determining the distance of the apex from the midpoint.
 
         Returns:
-            np.ndarray: Midpoint coordinates.
+        tuple: The coordinates of the inferred apex.
         """
-        point1 = np.array(point1)
-        point2 = np.array(point2)
-        midpoint = (point1 + point2) / 2
-        return midpoint
+        # Convert vertices to numpy arrays
+        vertex1 = np.array(vertex1)
+        vertex2 = np.array(vertex2)
 
-    def find_rotation_and_missing_point(self, a, b, c, a_prime, b_prime):
+        # Calculate the distance between the given vertices
+        distance = np.linalg.norm(vertex2 - vertex1)
+
+        # Calculate the midpoint of the given vertices
+        midpoint = (vertex1 + vertex2) / 2
+
+        # Calculate the unit vector along the line connecting the two vertices
+        line_vector = (vertex2 - vertex1) / distance
+
+        # Calculate the direction vector perpendicular to the line connecting the two vertices
+        perpendicular_vector = np.array([-line_vector[1], line_vector[0]])
+
+        # Calculate the length of the sides of the isosceles triangle
+        side_length = scaling_factor * distance
+
+        # Calculate the coordinates of the inferred apex
+        apex = midpoint + perpendicular_vector * side_length
+
+        return tuple(apex)
+
+    def calculate_rotation_angle(self, side, base):
         """
-        Find the rotation angle and missing point given two sets of points.
+        Calculate the rotation angle in radians using the law of cosines.
 
-        Args:
-            a (np.ndarray): First point in the original set.
-            b (np.ndarray): Second point in the original set.
-            c (np.ndarray): Third point in the original set.
-            a_prime (np.ndarray): First point in the rotated set.
-            b_prime (np.ndarray): Second point in the rotated set.
+        Parameters:
+        side (float): Length of one side of the triangle (nose_ear_right or nose_ear_left).
+        base (float): Length of the base of the triangle (ear_ear).
 
         Returns:
-            Tuple[float, np.ndarray, np.ndarray]: Rotation angle, missing point, rotated vector.
+        float: The rotation angle in radians.
         """
-        # Calculate the original angle formed by vector ab and the x-axis
-        original_angle = np.arctan2(b[1] - a[1], b[0] - a[0])
+        # Calculate the cosine of the angle using the law of cosines
+        cos_angle = (side**2 + side**2 - base**2) / (2 * side * side)
 
-        # Calculate the angle formed by the new vector a'b' and the x-axis
-        new_angle = np.arctan2(b_prime[1] - a_prime[1], b_prime[0] - a_prime[0])
+        # Calculate the angle in radians using arccosine
+        angle_rad = np.arccos(cos_angle)
 
-        # Compute the rotation angle
-        rotation_angle = new_angle - original_angle
-
-        middle = self.find_midpoint(a, b)
-        middle_prime = self.find_midpoint(a_prime, b_prime)
-        translation_middle = middle_prime - middle
-
-        rotated_c = self.rotate_vector(c, rotation_angle)
-
-        # Find the missing point d' using the rotated vectors
-        d_prime = rotated_c + translation_middle
-
-        return rotation_angle, d_prime, rotated_c
-
-    def infer_missing_point(self, points, unknown_point):
-        """
-        Infer the position of a missing point based on the orientation and
-        translation of the other 2 points.
-
-        Args:
-            points (List[np.ndarray]): Known points.
-            unknown_point (np.ndarray): Missing point.
-
-        Returns:
-            np.ndarray: Inferred missing point.
-        """
-        # known and unknown points must be on the same order
-        _, missing_point, _ = self.find_rotation_and_missing_point(
-            points[0], points[1], points[2], unknown_point[0], unknown_point[1]
-        )
-        return missing_point
-
+        return angle_rad
 
     def update_position(self, pose, prev_pose, threshold=0.97):
         """
@@ -354,40 +338,31 @@ class DLC:
 
         Args:
             pose (np.ndarray): Current pose information.
-            threshold (float, optional): Confidence threshold. Defaults to 0.85.
+            prev_pose (np.ndarray): Previous pose information.
+            threshold (float, optional): Confidence threshold. Defaults to 0.97.
 
         Returns:
             np.ndarray: Updated pose information.
         """
-        scores = np.array(pose[:3][:, 2])
-        high_conf_bdparts = np.where(scores >= threshold)[0]
-        len_high_conf_bdparts = len(high_conf_bdparts)
+        scores = pose[:3, 2]  # Extract confidence scores for body parts
+        low_conf = scores < threshold
+        p_pose= pose[:3, :-1]
 
-        if len_high_conf_bdparts < 2:
-            # if more than one point missing do not update pose
+        if np.sum(low_conf) > 1:
+            # If more than one point has low confidence, do not update the pose
             pose = prev_pose
-        elif len_high_conf_bdparts == 2:
-            curr_pose = np.array(prev_pose[:3, :2])
-            body_parts = np.array(pose[:3, :2])
-
-            # put the low confidence bodypart late
-            order_points_prev = np.append(
-                curr_pose[high_conf_bdparts],
-                curr_pose[np.where(scores < threshold)[0]],
-                axis=0,
-            )
-            order_points_new = np.append(
-                body_parts[high_conf_bdparts],
-                body_parts[np.where(scores < threshold)[0]],
-                axis=0,
-            )
-            missing_point = self.infer_missing_point(
-                order_points_prev, order_points_new
-            )
-            # update only the low confidence part
-            body_parts[np.where(scores < threshold)[0]] = missing_point
-            pose[:3, :2] = body_parts
-
+        elif np.sum(low_conf) == 1:
+            high_conf_points = p_pose[np.logical_not(low_conf)]
+            if low_conf[0]:
+                # if nose has low confidence 
+                p_pose[low_conf] = self.infer_apex(p_pose[2,:],p_pose[1,:])
+            else:
+                # if ear left has low confidence rotate with positive angle else negative
+                angle = self.rot_angle if low_conf[1] else -self.rot_angle
+                p_pose[low_conf] = self.rotate_point(
+                    high_conf_points[0], high_conf_points[1], angle
+                )
+        pose[:3, :-1] = p_pose
         return pose
 
     def init_curr_pos(self, threshold=0.95):
@@ -413,7 +388,7 @@ class DLC:
                     high_conf_points = True
                 time.sleep(0.1)
         return curr_pose
-    
+
     def process(self):
         """
         Run on a different process, wait to take an image, and return it.
@@ -428,14 +403,15 @@ class DLC:
 
                 # get pose from frame
                 dlc_pose_raw = self.dlc_live.get_pose(self.frame / 255)
-                self.pose_hdf5.append("dlc", np.insert(np.double(dlc_pose_raw.ravel()), 0, tmst))
+                self.pose_hdf5.append(
+                    "dlc", np.insert(np.double(dlc_pose_raw.ravel()), 0, tmst)
+                )
                 # check if position need any intervation
                 curr_pose = self.update_position(dlc_pose_raw, prev_pose)
                 final_pose = self.get_position(curr_pose, tmst)
                 # save pose to the shared memory
                 self._dlc_pose[:] = final_pose
                 # save in the hdf5 files
-                # print("pose ", np.insert(np.double(p.ravel()), 0, tmst))
                 self.pose_hdf5_infer.append(
                     "dlc_infer", np.insert(np.double(curr_pose.ravel()), 0, tmst)
                 )
