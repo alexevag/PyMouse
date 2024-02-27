@@ -332,7 +332,7 @@ class DLC:
 
         return angle_rad
 
-    def update_position(self, pose, prev_pose, threshold=0.97):
+    def update_position(self, pose, prev_pose, threshold=0.85):
         """
         Update the position based on the confidence of detected body parts.
 
@@ -363,6 +363,7 @@ class DLC:
                     high_conf_points[0], high_conf_points[1], angle
                 )
         pose[:3, :-1] = p_pose
+
         return pose
 
     def init_curr_pos(self, threshold=0.95):
