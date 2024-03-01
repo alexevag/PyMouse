@@ -290,12 +290,12 @@ class OpenField(Behavior, dj.Manual):
 
         # # check that the last licked port ia also a reward port
         licked_port = self.is_licking(since=tmst, reward=True)
-        self.response.port = licked_port
         if licked_port:
             self.interface.give_liquid(licked_port)
             # self.log_reward(self.reward_amount[self.licked_port])
             self.log_reward(self.reward_amount[self.licked_port])
             # self.update_history(self.response.port, self.reward_amount[self.licked_port])
+            # TODO: use response loc in the history
             self.update_history(
                 self.response.port, self.reward_amount[self.licked_port]
             )
@@ -303,6 +303,7 @@ class OpenField(Behavior, dj.Manual):
         return False
 
     def punish(self):
+        # TODO: use response loc in the history
         self.update_history(self.response.port, punish=True)
 
     def screen_pos_to_real_pos(self, pos, const_dim=215):
