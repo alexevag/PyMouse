@@ -82,7 +82,9 @@ class DLC:
         self.joints = joints
         self.logger = logger
 
-        h5s_filename = f"{self.logger.trial_key['animal_id']}_{self.logger.trial_key['session']}_{datetime.now().strftime("%Y-%m-%d-%H-%M-%S")}.h5"
+        h5s_filename = (f"{self.logger.trial_key['animal_id']}_"
+                        f"{self.logger.trial_key['session']}_"
+                        f"{datetime.now().strftime('%Y-%m-%d-%H-%M-%S')}.h5")
         self.filename_dlc = "dlc_" + h5s_filename
         self.logger.log_recording(
             dict(
