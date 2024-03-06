@@ -3,6 +3,7 @@ import os
 import shutil
 import sys
 import time
+from datetime import datetime
 from multiprocessing.shared_memory import SharedMemory
 
 import cv2
@@ -81,7 +82,7 @@ class DLC:
         self.joints = joints
         self.logger = logger
 
-        h5s_filename = f"animal_id_{self.logger.trial_key['animal_id']}_session_{self.logger.trial_key['session']}.h5"
+        h5s_filename = f"{self.logger.trial_key['animal_id']}_{self.logger.trial_key['session']}_{datetime.now().strftime("%Y-%m-%d-%H-%M-%S")}.h5"
         self.filename_dlc = "dlc_" + h5s_filename
         self.logger.log_recording(
             dict(
@@ -129,6 +130,7 @@ class DLC:
 
         self.pose_hdf5 = None
         self.pose_hdf5_processed = None
+        self.pose_hdf5_infer = None
 
         self.frame = None
 
@@ -166,7 +168,7 @@ class DLC:
                 self.target_path,
                 dataset_name="dlc_infer",
                 dataset_type=np.dtype(joints_types),
-                filename=self.filename_dlc,
+                filename=self.filename_dlc_infer,
             )
 
             joints_types_processed = [
@@ -176,7 +178,7 @@ class DLC:
                 ("angle", np.double),
             ]
 
-            filename_dlc, self.pose_hdf5_processed = self.logger.createDataset(
+            _, self.pose_hdf5_processed = self.logger.createDataset(
                 self.source_path,
                 self.target_path,
                 dataset_name="dlc_processed",
