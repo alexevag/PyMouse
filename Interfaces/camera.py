@@ -89,33 +89,14 @@ class Camera:
         self.target_path = target_path
         self.logger_timer = logger_timer
         self.process_queue = process_queue
-        if logger is not None:
-            filename_tmst, self.dataset = logger.createDataset(
-                self.source_path,
-                self.target_path,
-                dataset_name="frame_tmst",
-                dataset_type=np.dtype([("tmst", np.double)]),
-            )
-            self.logger.log_recording(
-                dict(
-                    rec_aim="sync",
-                    software="EthoPy",
-                    version="0.1",
-                    filename=filename_tmst,
-                    source_path=self.source_path,
-                    target_path=self.target_path,
-                )
-            )
+        self.logger = logger
 
         if not globals()["IMPORT_SKVIDEO"]:
             raise ImportError(
                 "you need to install the skvideo: sudo pip3 install sk-video"
             )
-         # TODO: remove sleep
-        time.sleep(1)
-        self.camera_process = mp.Process(self.start_rec())
-        self.camera_process.start()
-        # loc video recording
+
+        # log video recording
         self.logger.log_recording(
             dict(
                 rec_aim="openfield",
@@ -126,7 +107,22 @@ class Camera:
                 target_path=self.target_path,
             )
         )
+        h5s_filename =f"animal_id_{self.logger.trial_key['animal_id']}_session_{self.logger.trial_key['session']}.h5"
+        self.filename_tmst = "tmst_"+h5s_filename
+        self.logger.log_recording(
+            dict(
+                rec_aim="sync",
+                software="EthoPy",
+                version="0.1",
+                filename=self.filename_tmst,
+                source_path=self.source_path,
+                target_path=self.target_path,
+            )
+        )
 
+        self.camera_process = mp.Process(target = self.start_rec)
+        self.camera_process.start()
+  
     @property
     def filename(self):
         """str: The filename for recorded videos."""
@@ -195,6 +191,28 @@ class Camera:
         """
         Set up the camera and frame processing threads.
         """
+        self.video_output = FFmpegWriter(
+            self.source_path + self.filename + ".mp4",
+            inputdict={
+                "-r": str(self.fps),
+            },
+            outputdict={
+                "-vcodec": "libx264",
+                "-pix_fmt": "yuv420p",
+                "-r": str(self.fps),
+                "-preset": "ultrafast",
+            },
+        )
+
+        if self.logger is not None:
+            filename_tmst, self.dataset = self.logger.createDataset(
+                self.source_path,
+                self.target_path,
+                dataset_name="frame_tmst",
+                dataset_type=np.dtype([("tmst", np.double)]),
+                filename = self.filename_tmst
+            )
+
         self.frame_queue = Queue()
         self.capture_runner = threading.Thread(target=self.rec, args=())
         self.write_runner = threading.Thread(
@@ -208,26 +226,28 @@ class Camera:
         self.setup()
         self.capture_runner.start()
         self.write_runner.start()
-
+        self.capture_runner.join()
+        self.write_runner.join()
+        self.video_output.close()
+    
     def dequeue(self, frame_queue: "Queue"):
         """
         Dequeue frames from the frame_queue and write them.
         """
-        while not self.stop.is_set() or frame_queue.qsize() > 0:
+        while not self.stop.is_set() or self.recording.is_set():
             if not frame_queue.empty():
                 self.write_frame(frame_queue.get())
             else:
                 time.sleep(0.01)
-            
+
     def stop_rec(self):
         """
         Stop video recording.
         """
         self.stop.set()
-        self.camera_process.join()
-        self.camera_process.close()
-        self.capture_runner.join()
-        self.write_runner.join()
+        time.sleep(1)
+        # TODO: use join and close (possible issue due to h5 files)
+        self.camera_process.terminate()
 
     def rec(self):
         """
@@ -283,7 +303,6 @@ class WebCam(Camera):
         """
         self.fps = 30
         self.iframe = 0
-        self.recording = False
 
         if not globals()["IMPORT_CV2"]:
             raise ImportError(
@@ -304,19 +323,7 @@ class WebCam(Camera):
         self.width, self.height = resolution[0], resolution[1]
 
         super(WebCam, self).__init__(*args, **kwargs)
-        out_vid_fn = self.source_path + self.filename + ".mp4"
-        self.video_output = FFmpegWriter(
-            out_vid_fn,
-            inputdict={
-                "-r": str(self.fps),
-            },
-            outputdict={
-                "-vcodec": "libx264",
-                "-pix_fmt": "yuv420p",
-                "-r": str(self.fps),
-                "-preset": "ultrafast",
-            },
-        )
+
         # self.setup()
 
     def set_resolution(self, width, height):
@@ -378,6 +385,10 @@ class WebCam(Camera):
         doesn't exceed its maximum size. We need for the process_queue(size:2) the latest image
         so if it is full get a frame and put the latest one.
         """
+        print("#"*50)
+        print("camera process id ",mp.current_process())
+        print("#"*50)
+        self.recording.set()
         # first_tmst = self.logger_timer.elapsed_time()
         # cam_tmst_first = self.camera.get(cv2.CAP_PROP_POS_MSEC)
         while not self.stop.is_set():
@@ -386,13 +397,17 @@ class WebCam(Camera):
             # tmst = first_tmst + (self.camera.get(cv2.CAP_PROP_POS_MSEC)-cam_tmst_first)
             self.iframe += 1
             if check:
-                self.frame_queue.put_nowait((tmst, image))
+                self.frame_queue.put((tmst, image))
                 # Check if a separate process queue is provided
                 if self.process_queue is not False:
                     # Ensure the process queue doesn't exceed its maximum size
                     if self.process_queue.full():
                         self.process_queue.get()
                     self.process_queue.put_nowait((tmst, image))
+        self.camera.release()
+        self.recording.clear()
+        print("exit the rec -----------------------------------------------------------")
+        print("elf.frame_queue --------------------->", self.frame_queue.qsize())
 
     def stop_rec(self):
         """
@@ -402,17 +417,14 @@ class WebCam(Camera):
         closes the video output stream, clears the recording flag, and performs cleanup
         by removing local video files.
         """
-        if self.recording.is_set():
+        print("release camera")
+        # if self.recording.is_set():
             # Release camera resources if recording is in progress
-            self.camera.release()
+            # self.camera.release()
+        print("super().stop_rec()")
 
         # Call the superclass method to perform additional cleanup
         super().stop_rec()
-
-        self.video_output.close()
-
-        # Clear the recording flag
-        self.recording.clear()
 
         # Remove local video files
         self.clear_local_videos()

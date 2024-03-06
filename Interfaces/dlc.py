@@ -81,7 +81,7 @@ class DLC:
         self.joints = joints
         self.logger = logger
 
-        h5s_filename =f"{self.logger.trial_key["animal_id"]}_{self.logger.trial_key["session"]}.h5"
+        h5s_filename =f"animal_id_{self.logger.trial_key['animal_id']}_session_{self.logger.trial_key['session']}.h5"
         self.filename_dlc = "dlc_"+h5s_filename
         self.logger.log_recording(
             dict(
