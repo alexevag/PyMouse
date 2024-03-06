@@ -81,6 +81,41 @@ class DLC:
         self.joints = joints
         self.logger = logger
 
+        h5s_filename =f"{self.logger.trial_key["animal_id"]}_{self.logger.trial_key["session"]}.h5"
+        self.filename_dlc = "dlc_"+h5s_filename
+        self.logger.log_recording(
+            dict(
+                rec_aim="openfield",
+                software="EthoPy",
+                version="0.1",
+                filename=self.filename_dlc,
+                source_path=self.source_path,
+                target_path=self.target_path,
+            )
+        )
+
+        self.filename_dlc_infer = "dlc_infer_"+h5s_filename
+        self.logger.log_recording(
+            dict(
+                rec_aim="openfield",
+                software="EthoPy",
+                version="0.1",
+                filename=self.filename_dlc_infer,
+                source_path=self.source_path,
+                target_path=self.target_path,
+            )
+        )
+        self.filename_dlc_processed = "dlc_processed_"+h5s_filename
+        self.logger.log_recording(
+            dict(
+                rec_aim="openfield",
+                software="EthoPy",
+                version="0.1",
+                filename=self.filename_dlc_processed,
+                source_path=self.source_path,
+                target_path=self.target_path,
+            )
+        )
         self.screen_size = 215
         self.screen_pos = np.array(
             [[self.screen_size, 0], [self.screen_size, self.screen_size]]
@@ -117,12 +152,13 @@ class DLC:
             for joint in self.joints:
                 for p in points:
                     joints_types.append((joint + p, np.double))
-
+            
             _, self.pose_hdf5 = self.logger.createDataset(
                 self.source_path,
                 self.target_path,
                 dataset_name="dlc",
                 dataset_type=np.dtype(joints_types),
+                filename = self.filename_dlc
             )
 
             _, self.pose_hdf5_infer = self.logger.createDataset(
@@ -130,6 +166,7 @@ class DLC:
                 self.target_path,
                 dataset_name="dlc_infer",
                 dataset_type=np.dtype(joints_types),
+                filename = self.filename_dlc
             )
 
             joints_types_processed = [
@@ -144,6 +181,7 @@ class DLC:
                 self.target_path,
                 dataset_name="dlc_processed",
                 dataset_type=np.dtype(joints_types_processed),
+                filename = self.filename_dlc_processed
             )
 
         self.frame_process = frame_process
