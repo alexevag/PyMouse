@@ -96,7 +96,7 @@ class Camera:
                 dataset_name="frame_tmst",
                 dataset_type=np.dtype([("tmst", np.double)]),
             )
-            self.exp.log_recording(
+            self.logger.log_recording(
                 dict(
                     rec_aim="sync",
                     software="EthoPy",
@@ -116,7 +116,7 @@ class Camera:
         self.camera_process = mp.Process(self.start_rec())
         self.camera_process.start()
         # loc video recording
-        self.exp.log_recording(
+        self.logger.log_recording(
             dict(
                 rec_aim="openfield",
                 software="EthoPy",

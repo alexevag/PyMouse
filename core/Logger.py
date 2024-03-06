@@ -8,6 +8,7 @@ import datajoint as dj
 from utils.helper_functions import *
 from utils.Timer import Timer
 from utils.Writer import Writer
+from typing import Optional, Tuple, Dict
 
 dj.config["enable_python_native_blobs"] = True
 
@@ -151,6 +152,23 @@ class Logger:
         self.put(table='Control', tuple=self.setup_info, replace=True, priority=1, block=block, validate=block)
         self.setup_status = self.setup_info['status']
 
+    def log_recording(self, key: Dict[str, any]):
+        """
+        Logs a recording.
+        Args:
+            key (dict): A dictionary containing information about the recording.
+        Returns:
+            None
+        """
+        recs = self.get(
+            schema="recording",
+            table="Recording",
+            key=self.trial_key,
+            fields=["rec_idx"],
+        )
+        rec_idx = 1 if not recs else max(recs) + 1
+        self.log("Recording", data={**key, "rec_idx": rec_idx}, schema="recording", block=True)
+
     def get_setup_info(self, field):
         return (experiment.Control() & dict(setup=self.setup)).fetch1(field)
 
@@ -185,13 +203,42 @@ class Logger:
         while not self.queue.empty(): print('Waiting for empty queue... qsize: %d' % self.queue.qsize()); time.sleep(1)
         self.thread_end.set()
 
-    def createDataset(self, path, target_path, dataset_name, dataset_type):
-        filename = '%s_%d_%d_%s.h5' % (dataset_name, self.trial_key['animal_id'],
-                                         self.trial_key['session'],
-                                         datetime.now().strftime("%Y-%m-%d-%H-%M-%S"))
-        self.datasets[dataset_name] = self.Writer(path + filename, target_path)
-        self.datasets[dataset_name].createDataset(dataset_name, shape=(1,), dtype=dataset_type)
-        return filename, self.datasets[dataset_name]
+   def createDataset(
+            self,
+            path: str,
+            target_path: str,
+            dataset_name: str,
+            dataset_type: type,
+            filename: Optional[str] = None,
+        ) -> Tuple[str, Any]:
+            """
+            Create a dataset and return the filename and dataset object.
+            Args:
+                path (str): The path where the dataset will be saved.
+                target_path (str): The target path for the dataset.
+                dataset_name (str): The name of the dataset.
+                dataset_type (type): The datatype of the dataset.
+                filename (str, optional): The filename for the dataset. If not provided, a default filename will be generated based on the dataset name, animal ID, session, and current timestamp.
+            Returns:
+                Tuple[str, Any]: A tuple containing the filename and the dataset object.
+            """
+            # Generate filename if not provided
+            if filename is None:
+                filename = "%s_%d_%d_%s.h5" % (
+                    dataset_name,
+                    self.trial_key["animal_id"],
+                    self.trial_key["session"],
+                    datetime.now().strftime("%Y-%m-%d-%H-%M-%S"),
+                )
+
+            # Create dataset
+            self.datasets[dataset_name] = self.Writer(path + filename, target_path)
+            self.datasets[dataset_name].createDataset(
+                dataset_name, shape=(1,), dtype=dataset_type
+            )
+
+            # Return filename and dataset object
+            return filename, self.datasets[dataset_name]
 
     def closeDatasets(self):
         for dataset in self.datasets:
