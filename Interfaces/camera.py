@@ -102,13 +102,13 @@ class Camera:
                 rec_aim="openfield",
                 software="EthoPy",
                 version="0.1",
-                filename=self.filename+".mp4",
+                filename=self.filename + ".mp4",
                 source_path=self.source_path,
                 target_path=self.target_path,
             )
         )
-        h5s_filename =f"animal_id_{self.logger.trial_key['animal_id']}_session_{self.logger.trial_key['session']}.h5"
-        self.filename_tmst = "tmst_"+h5s_filename
+        h5s_filename = f"animal_id_{self.logger.trial_key['animal_id']}_session_{self.logger.trial_key['session']}.h5"
+        self.filename_tmst = "tmst_" + h5s_filename
         self.logger.log_recording(
             dict(
                 rec_aim="sync",
@@ -120,9 +120,9 @@ class Camera:
             )
         )
 
-        self.camera_process = mp.Process(target = self.start_rec)
+        self.camera_process = mp.Process(target=self.start_rec)
         self.camera_process.start()
-  
+
     @property
     def filename(self):
         """str: The filename for recorded videos."""
@@ -210,7 +210,7 @@ class Camera:
                 self.target_path,
                 dataset_name="frame_tmst",
                 dataset_type=np.dtype([("tmst", np.double)]),
-                filename = self.filename_tmst
+                filename=self.filename_tmst,
             )
 
         self.frame_queue = Queue()
@@ -229,7 +229,7 @@ class Camera:
         self.capture_runner.join()
         self.write_runner.join()
         self.video_output.close()
-    
+
     def dequeue(self, frame_queue: "Queue"):
         """
         Dequeue frames from the frame_queue and write them.
@@ -385,9 +385,6 @@ class WebCam(Camera):
         doesn't exceed its maximum size. We need for the process_queue(size:2) the latest image
         so if it is full get a frame and put the latest one.
         """
-        print("#"*50)
-        print("camera process id ",mp.current_process())
-        print("#"*50)
         self.recording.set()
         # first_tmst = self.logger_timer.elapsed_time()
         # cam_tmst_first = self.camera.get(cv2.CAP_PROP_POS_MSEC)
@@ -406,8 +403,6 @@ class WebCam(Camera):
                     self.process_queue.put_nowait((tmst, image))
         self.camera.release()
         self.recording.clear()
-        print("exit the rec -----------------------------------------------------------")
-        print("elf.frame_queue --------------------->", self.frame_queue.qsize())
 
     def stop_rec(self):
         """
@@ -417,11 +412,10 @@ class WebCam(Camera):
         closes the video output stream, clears the recording flag, and performs cleanup
         by removing local video files.
         """
-        print("release camera")
+        # TODO: check the stop_rec function and define a function release to be called by the process
         # if self.recording.is_set():
-            # Release camera resources if recording is in progress
-            # self.camera.release()
-        print("super().stop_rec()")
+        # Release camera resources if recording is in progress
+        # self.camera.release()
 
         # Call the superclass method to perform additional cleanup
         super().stop_rec()

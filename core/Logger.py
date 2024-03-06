@@ -166,7 +166,6 @@ class Logger:
             key=self.trial_key,
             fields=["rec_idx"],
         )
-        print("recs ---------------------------------------------> ", recs)
         rec_idx = 1 if len(recs)==0 else max(recs) + 1
         self.log("Recording", data={**key, "rec_idx": rec_idx}, schema="recording", block=True)
 

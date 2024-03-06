@@ -81,8 +81,8 @@ class DLC:
         self.joints = joints
         self.logger = logger
 
-        h5s_filename =f"animal_id_{self.logger.trial_key['animal_id']}_session_{self.logger.trial_key['session']}.h5"
-        self.filename_dlc = "dlc_"+h5s_filename
+        h5s_filename = f"animal_id_{self.logger.trial_key['animal_id']}_session_{self.logger.trial_key['session']}.h5"
+        self.filename_dlc = "dlc_" + h5s_filename
         self.logger.log_recording(
             dict(
                 rec_aim="openfield",
@@ -94,7 +94,7 @@ class DLC:
             )
         )
 
-        self.filename_dlc_infer = "dlc_infer_"+h5s_filename
+        self.filename_dlc_infer = "dlc_infer_" + h5s_filename
         self.logger.log_recording(
             dict(
                 rec_aim="openfield",
@@ -105,7 +105,7 @@ class DLC:
                 target_path=self.target_path,
             )
         )
-        self.filename_dlc_processed = "dlc_processed_"+h5s_filename
+        self.filename_dlc_processed = "dlc_processed_" + h5s_filename
         self.logger.log_recording(
             dict(
                 rec_aim="openfield",
@@ -152,13 +152,13 @@ class DLC:
             for joint in self.joints:
                 for p in points:
                     joints_types.append((joint + p, np.double))
-            
+
             _, self.pose_hdf5 = self.logger.createDataset(
                 self.source_path,
                 self.target_path,
                 dataset_name="dlc",
                 dataset_type=np.dtype(joints_types),
-                filename = self.filename_dlc
+                filename=self.filename_dlc,
             )
 
             _, self.pose_hdf5_infer = self.logger.createDataset(
@@ -166,7 +166,7 @@ class DLC:
                 self.target_path,
                 dataset_name="dlc_infer",
                 dataset_type=np.dtype(joints_types),
-                filename = self.filename_dlc
+                filename=self.filename_dlc,
             )
 
             joints_types_processed = [
@@ -181,7 +181,7 @@ class DLC:
                 self.target_path,
                 dataset_name="dlc_processed",
                 dataset_type=np.dtype(joints_types_processed),
-                filename = self.filename_dlc_processed
+                filename=self.filename_dlc_processed,
             )
 
         self.frame_process = frame_process
@@ -384,7 +384,7 @@ class DLC:
         """
         scores = pose[:3, 2]  # Extract confidence scores for body parts
         low_conf = scores < threshold
-        p_pose= pose[:3, :-1]
+        p_pose = pose[:3, :-1]
 
         if np.sum(low_conf) > 1:
             # If more than one point has low confidence, do not update the pose
@@ -392,8 +392,8 @@ class DLC:
         elif np.sum(low_conf) == 1:
             high_conf_points = p_pose[np.logical_not(low_conf)]
             if low_conf[0]:
-                # if nose has low confidence 
-                p_pose[low_conf] = self.infer_apex(p_pose[2,:],p_pose[1,:])
+                # if nose has low confidence
+                p_pose[low_conf] = self.infer_apex(p_pose[2, :], p_pose[1, :])
             else:
                 # if ear left has low confidence rotate with positive angle else negative
                 angle = self.rot_angle if low_conf[1] else -self.rot_angle
@@ -527,6 +527,4 @@ class DLC:
         self.sm.unlink()
         self.logger.closeDatasets()
         self.move_hdf()
-        print("self.dlc_live_process.join()")
         self.dlc_live_process.terminate()
-        print("self.dlc_live_process.join()")
