@@ -113,7 +113,7 @@ class Camera:
             )
         )
         h5s_filename = f"animal_id_{self.logger.trial_key['animal_id']}_session_{self.logger.trial_key['session']}.h5"
-        self.filename_tmst = "tmst_" + h5s_filename
+        self.filename_tmst = "video_tmst_" + h5s_filename
         self.logger.log_recording(
             dict(
                 rec_aim="sync",
