@@ -64,11 +64,7 @@ class Camera:
     def __init__(
         self,
         exp,
-        source_path: Optional[str] = None,
-        target_path: Optional[str] = None,
-        filename: Optional[str] = None,
         fps: int = 30,
-        logger_timer: "Timer" = None,
         process_queue: bool = False,
         logger=None,
     ):
@@ -84,13 +80,22 @@ class Camera:
 
         self.fps = fps
         self._cam = None
-        self.filename = filename
-        self.source_path = source_path
-        self.target_path = target_path
-        self.logger_timer = logger_timer
-        self.process_queue = process_queue
         self.logger = logger
-
+        self.animal_id = self.logger.trial_key["animal_id"]
+        self.session = self.logger.trial_key["session"]
+        self.filename = f"animal_id_{self.animal_id}_session_{self.session}"
+        self.source_path = "/home/eflab/alex/PyMouse/video/"
+        self.target_path = "/mnt/lab/data/OpenField/"
+        self.logger_timer = self.logger.logger_timer
+        self.process_queue = process_queue
+    
+        camera_params = self.logger.get(
+            table="SetupConfiguration.Camera",
+            key=f"setup_conf_idx={self.exp.params['setup_conf_idx']}",
+            as_dict=True,
+        )[0]
+        self.resolution = (camera_params["resolution_x"], camera_params["resolution_y"])
+        
         if not globals()["IMPORT_SKVIDEO"]:
             raise ImportError(
                 "you need to install the skvideo: sudo pip3 install sk-video"

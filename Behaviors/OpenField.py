@@ -8,7 +8,7 @@ import numpy as np
 from core.Behavior import Behavior, behavior
 from Interfaces.camera import WebCam
 from Interfaces.dlc import DLC
-from utils.helper_functions import read_yalm, shared_memory_array
+from utils.helper_functions import shared_memory_array
 
 
 @behavior.schema
@@ -66,8 +66,6 @@ class OpenField(Behavior, dj.Manual):
     def __init__(self):
         # constant parameters
         self.model_columns_len = 3  # x,y,prediction confidence constant
-        self.camera_source_path = "/home/eflab/alex/PyMouse/video/"
-        self.camera_target_path = "/mnt/lab/data/OpenField/"
 
         # create a queue that returns the arena cornerns
         self.dlc_queue = mp.Queue(maxsize=1)
@@ -85,15 +83,6 @@ class OpenField(Behavior, dj.Manual):
         )
         self.shared_memory_shape = (1, 4)
 
-    def setup(self, exp):
-        super(OpenField, self).setup(exp)
-
-        # read camera parameters
-        camera_params = self.logger.get(
-            table="SetupConfiguration.Camera",
-            key=f"setup_conf_idx={self.exp.params['setup_conf_idx']}",
-            as_dict=True,
-        )[0]
         # read screen parameters
         # screen_params = self.logger.get(
         #     table="SetupConfiguration.Screen",
@@ -106,40 +95,27 @@ class OpenField(Behavior, dj.Manual):
         self.screen_pos = np.array(
             [[self.screen_size, 0], [self.screen_size, self.screen_size]]
         )
-        self.resolution = (camera_params["resolution_x"], camera_params["resolution_y"])
-        self.all_joints_names = read_yalm(
-            path=self.exp.params["model_path"],
-            filename="pose_cfg.yaml",
-            variable="all_joints_names",
-        )
+
+    def setup(self, exp):
+        super(OpenField, self).setup(exp)
 
         # start camera recording process
-        self.animal_id = self.logger.trial_key["animal_id"]
-        self.session = self.logger.trial_key["session"]
-        animal_id_session_str = f"animal_id_{self.animal_id}_session_{self.session}"
-
         self.cam = WebCam(
             self.exp,
-            source_path=self.camera_source_path,
-            target_path=self.camera_target_path,
-            filename=animal_id_session_str,
-            logger_timer=self.logger.logger_timer,
             logger=self.logger,
             process_queue=self.process_q,
-            resolution=self.resolution,
         )
 
         # start DLC process
         self.dlc = DLC(
             self.process_q,
             self.dlc_queue,
-            path=self.exp.params["model_path"],
+            model_path=self.exp.params["model_path"],
             shared_memory_shape=self.shared_memory_shape,
             logger=self.logger,
-            joints=self.all_joints_names,
         )
 
-        # wait until the dlc setup has finished initialization before start the experiment
+        # wait until the dlc setup hass finished initialization before start the experiment
         while not self.dlc.setup_ready.is_set():
             sys.stdout.write(
                 "\rWaiting for the initialization of dlc" + "." * (int(time.time()) % 4)
@@ -148,10 +124,13 @@ class OpenField(Behavior, dj.Manual):
             time.sleep(0.1)
         # save the corners/position
         self.affine_matrix, self.corners = self.dlc_queue.get()
-        arena = {"affine_matrix": self.affine_matrix, "corners": self.corners}
         self.logger.put(
             table="Configuration.Arena",
-            tuple={**arena, **self.logger.trial_key},
+            tuple={
+                "affine_matrix": self.affine_matrix,
+                "corners": self.corners,
+                **self.logger.trial_key,
+            },
             schema="behavior",
         )
 

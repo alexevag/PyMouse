@@ -10,6 +10,7 @@ import cv2
 import numpy as np
 from cv2 import getAffineTransform, invertAffineTransform
 from dlclive import DLCLive, Processor
+from utils.helper_functions import read_yalm
 
 np.set_printoptions(suppress=True)
 
@@ -53,17 +54,16 @@ class DLC:
         self,
         frame_process,
         dlc_queue,
-        path: str,
+        model_path: str,
         shared_memory_shape,
         logger,
-        joints,
-        # beh_hash
     ):
-        self.path = path
+        self.model_path = model_path
         self.nose_y = 0
         self.theta = 0
         self.timestamp = 0
         self.rot_angle = self.calculate_rotation_angle(side=1, base=0.8)
+
 
         # attach another shared memory block
         self.sm = SharedMemory("pose")
@@ -79,7 +79,11 @@ class DLC:
 
         self.source_path = "/home/eflab/alex/PyMouse/dlc/"
         self.target_path = "/mnt/lab/data/OpenField/"
-        self.joints = joints
+        self.joints = read_yalm(
+            path= self.model_path,
+            filename="pose_cfg.yaml",
+            variable="all_joints_names",
+        )
         self.logger = logger
 
         h5s_filename = (f"{self.logger.trial_key['animal_id']}_"
@@ -194,7 +198,7 @@ class DLC:
         self.M, self.M_inv = self.affine_transform(self.corners, self.screen_size)
         dlc_queue.put((self.M, self.corners))
         # initialize dlc models
-        self.dlc_live = DLCLive(self.path, processor=self.dlc_proc)
+        self.dlc_live = DLCLive(self.model_path, processor=self.dlc_proc)
         self.dlc_live.init_inference(self.frame_process.get()[1] / 255)
 
         # flag to indicate that all the dlc inits has finished before start experiment
