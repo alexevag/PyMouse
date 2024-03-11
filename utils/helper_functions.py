@@ -4,11 +4,21 @@ import hashlib
 import os
 from itertools import product
 from multiprocessing.shared_memory import SharedMemory
+from typing import Any, Dict, List
 
 import numpy as np
-import yaml
-from scipy import ndimage
 
+try:
+    import yaml
+    IMPORT_YALM = True
+except ImportError:
+    IMPORT_YALM = False
+
+try:
+    from scipy import ndimage
+    IMPORT_SCIPY=True
+except ImportError:
+    IMPORT_SCIPY=False
 
 def sub2ind(array_shape, rows, cols):
     return rows * array_shape[1] + cols
@@ -24,6 +34,11 @@ def flat2curve(I, dist, mon_size, **kwargs):
         x = rho * np.cos(phi)
         y = rho * np.sin(phi)
         return (x, y)
+
+    if not globals()["IMPORT_SCIPY"]:
+        raise ImportError(
+            "you need to install the scipy: sudo pip3 install scipy"
+        )
 
     params = dict({'center_x': 0, 'center_y': 0, 'method': 'index'},
                   **kwargs)  # center_x, center_y points in normalized x coordinates from center
@@ -64,21 +79,42 @@ def reverse_lookup(dictionary, target):
     return next(key for key, value in dictionary.items() if value == target)
 
 
-def factorize(cond):
-    values = list(cond.values())
-    for i in range(0, len(values)):
-        if not isinstance(values[i], list):
-            values[i] = [values[i]]
+def factorize(cond: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """
+    Factorizes conditions into individual combinations.
 
-    conds = list(dict(zip(cond, x)) for x in product(*values))
-    for icond, cond in enumerate(conds):
-        values = list(cond.values())
-        names = list(cond.keys())
-        for ivalue, value in enumerate(values):
-            if type(value) is list:
-                value = tuple(value)
-            cond.update({names[ivalue]: value})
-        conds[icond] = cond
+    This function takes a dictionary of conditions and generates all possible combinations
+    of conditions, where each combination consists of one value for each key in the input
+    dictionary.
+
+    Args:
+    - cond (Dict[str, Any]): A dictionary representing conditions.
+
+    Returns:
+    - List[Dict[str, Any]]: List of factorized conditions.
+
+    Example:
+    Suppose we have the following conditions:
+    cond = {'param1': [1, 2], 'param2': [3, 4], 'param3': 'value', 'param4': (5, 6)}
+    This function will generate the following combinations:
+    [{'param1': 1, 'param2': 3, 'param3': 'value', 'param4': (5, 6)},
+     {'param1': 1, 'param2': 4, 'param3': 'value', 'param4': (5, 6)},
+     {'param1': 2, 'param2': 3, 'param3': 'value', 'param4': (5, 6)},
+     {'param1': 2, 'param2': 4, 'param3': 'value', 'param4': (5, 6)}]
+    """
+    # Ensure all values are wrapped in lists
+    values = [v if isinstance(v, list) else [v] for v in cond.values()]
+
+    # Generate all combinations of conditions
+    conds = []
+    for combination in product(*values):
+        # Create a dictionary representing each combination
+        combined_cond = dict(zip(cond.keys(), combination))
+        # Convert lists to tuples for immutability
+        combined_cond = {
+            k: tuple(v) if isinstance(v, list) else v for k, v in combined_cond.items()
+        }
+        conds.append(combined_cond)
 
     return conds
 
@@ -121,7 +157,7 @@ class DictStruct:
         return self.__dict__.values()
 
 
-def read_yalm(path, filename, variable):
+def read_yalm(path:str, filename:str, variable:str) -> Any:
     """
     Read a YAML file and return a specific variable.
 
@@ -137,6 +173,11 @@ def read_yalm(path, filename, variable):
         FileNotFoundError: If the specified file does not exist.
         KeyError: If the specified variable is not found in the YAML file.
     """
+    if not globals()["IMPORT_YALM"]:
+        raise ImportError(
+            "you need to install the skvideo: sudo pip3 install PyYAML"
+        )
+
     file_path = os.path.join(path, filename)
     if os.path.exists(file_path):
         with open(file_path, "r", encoding="UTF-8") as stream:
@@ -148,7 +189,7 @@ def read_yalm(path, filename, variable):
     else:
         raise FileNotFoundError(f"There is no file '{filename}' in directory: '{path}'")
 
-def shared_memory_array(name, rows_len, columns_len, _dtype="float32"):
+def shared_memory_array(name: str, rows_len: int, columns_len: int, dtype: str = "float32") -> tuple:
     """
     Creates or retrieves a shared memory array.
 
@@ -156,15 +197,17 @@ def shared_memory_array(name, rows_len, columns_len, _dtype="float32"):
         name (str): Name of the shared memory.
         rows_len (int): Number of rows in the array.
         columns_len (int): Number of columns in the array.
-        _dtype (str, optional): Data type of the array. Defaults to "float32".
+        dtype (str, optional): Data type of the array. Defaults to "float32".
 
     Returns:
-        numpy.ndarray: Shared memory array.
-        multiprocessing.shared_memory.SharedMemory: Shared memory object.
+        tuple(numpy.ndarray, multiprocessing.shared_memory.SharedMemory): 
+        Shared memory array and SharedMemory object.
     """
-    _bytes = np.dtype(_dtype).itemsize
-    n_bytes = rows_len * columns_len * _bytes
     try:
+        dtype_obj = np.dtype(dtype)
+        bytes_per_item = dtype_obj.itemsize
+        n_bytes = rows_len * columns_len * bytes_per_item
+
         # Create or retrieve the shared memory
         sm = SharedMemory(name=name, create=True, size=n_bytes)
     except FileExistsError:
@@ -173,8 +216,8 @@ def shared_memory_array(name, rows_len, columns_len, _dtype="float32"):
     except Exception as e:
         raise RuntimeError('Error creating/retrieving shared memory: ' + str(e)) from e
 
-    # create a new numpy array that uses the shared memory
-    _data = np.ndarray((rows_len, columns_len), dtype=_dtype, buffer=sm.buf)
-    _data.fill(0)
+    # Create a numpy array that uses the shared memory
+    shared_array = np.ndarray((rows_len, columns_len), dtype=dtype_obj, buffer=sm.buf)
+    shared_array.fill(0)
 
-    return _data, sm
+    return shared_array, sm
