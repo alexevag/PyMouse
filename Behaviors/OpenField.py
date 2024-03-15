@@ -91,7 +91,7 @@ class OpenField(Behavior, dj.Manual):
         # )[0]
         # screen_height, screen_width = self.screen_dimensions(screen_params["size"])
         # self.screen_size = int(screen_width * 10)  # mm
-        self.screen_size = 215
+        self.screen_size = 310
         self.screen_pos = np.array(
             [[self.screen_size, 0], [self.screen_size, self.screen_size]]
         )
@@ -272,11 +272,11 @@ class OpenField(Behavior, dj.Manual):
         if licked_port:
             self.interface.give_liquid(licked_port)
             # self.log_reward(self.reward_amount[self.licked_port])
-            self.log_reward(self.reward_amount[self.licked_port])
+            self.log_reward(self.reward_amount[licked_port])
             # self.update_history(self.response.port, self.reward_amount[self.licked_port])
             # TODO: use response loc in the history
             self.update_history(
-                self.response.port, self.reward_amount[self.licked_port]
+                licked_port, self.reward_amount[licked_port]
             )
             return True
         return False

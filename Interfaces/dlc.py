@@ -123,7 +123,7 @@ class DLC:
                 target_path=self.target_path,
             )
         )
-        self.screen_size = 215
+        self.screen_size = 310
         self.screen_pos = np.array(
             [[self.screen_size, 0], [self.screen_size, self.screen_size]]
         )
@@ -218,7 +218,7 @@ class DLC:
         dlc_corners_path = (
             "/home/eflab/Desktop/"
             "Openfield_test_box-Konstantina-2023-11-20/exported-models/"
-            "DLC_Openfield_test_box_resnet_50_iteration-2_shuffle-1"
+            "DLC_Openfield_test_box_resnet_50_iteration-3_shuffle-1"
         )
 
         # get a frame from the queue of the camera in order to init the dlc_live
@@ -378,7 +378,7 @@ class DLC:
 
         return angle_rad
 
-    def update_position(self, pose, prev_pose, threshold=0.85):
+    def update_position(self, pose, prev_pose,  threshold=0.85):
         """
         Update the position based on the confidence of detected body parts.
 
