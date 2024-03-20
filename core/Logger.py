@@ -261,7 +261,7 @@ class Logger:
             target_path = False
         else:
             target_path = self.target_path + '%d_%d/' % (self.trial_key['animal_id'], self.trial_key['session'])
-            if not os.path.isdir(target_path): 
+            if not os.path.isdir(target_path):
                 os.makedirs(target_path)
 
         # Generate filename if not provided

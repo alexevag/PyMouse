@@ -10,6 +10,7 @@ import cv2
 import numpy as np
 from cv2 import getAffineTransform, invertAffineTransform
 from dlclive import DLCLive, Processor
+
 from utils.helper_functions import read_yalm
 
 np.set_printoptions(suppress=True)
@@ -76,15 +77,16 @@ class DLC:
         self.setup_ready.clear()
         self.close = mp.Event()
         self.close.clear()
-
-        self.source_path = "/home/eflab/alex/PyMouse/dlc/"
-        self.target_path = "/mnt/lab/data/OpenField/"
+        self.logger = logger
+        folder = (f"Recordings/{self.logger.trial_key['animal_id']}"
+                  f"_{self.logger.trial_key['session']}/")
+        self.source_path = self.logger.source_path + folder
+        self.target_path = self.logger.target_path + folder
         self.joints = read_yalm(
             path= self.model_path,
             filename="pose_cfg.yaml",
             variable="all_joints_names",
         )
-        self.logger = logger
 
         h5s_filename = (f"{self.logger.trial_key['animal_id']}_"
                         f"{self.logger.trial_key['session']}_"
@@ -161,20 +163,18 @@ class DLC:
                 for p in points:
                     joints_types.append((joint + p, np.double))
 
-            _, self.pose_hdf5 = self.logger.createDataset(
-                self.source_path,
-                self.target_path,
+            self.pose_hdf5 = self.logger.createDataset(
                 dataset_name="dlc",
                 dataset_type=np.dtype(joints_types),
                 filename=self.filename_dlc,
+                log = True
             )
 
-            _, self.pose_hdf5_infer = self.logger.createDataset(
-                self.source_path,
-                self.target_path,
+            self.pose_hdf5_infer = self.logger.createDataset(
                 dataset_name="dlc_infer",
                 dataset_type=np.dtype(joints_types),
                 filename=self.filename_dlc_infer,
+                log = False
             )
 
             joints_types_processed = [
@@ -184,12 +184,11 @@ class DLC:
                 ("angle", np.double),
             ]
 
-            _, self.pose_hdf5_processed = self.logger.createDataset(
-                self.source_path,
-                self.target_path,
+            self.pose_hdf5_processed = self.logger.createDataset(
                 dataset_name="dlc_processed",
                 dataset_type=np.dtype(joints_types_processed),
                 filename=self.filename_dlc_processed,
+                log = False
             )
 
         self.frame_process = frame_process

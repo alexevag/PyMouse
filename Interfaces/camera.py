@@ -84,8 +84,8 @@ class Camera:
         self.animal_id = self.logger.trial_key["animal_id"]
         self.session = self.logger.trial_key["session"]
         self.filename = f"animal_id_{self.animal_id}_session_{self.session}"
-        self.source_path = "/home/eflab/alex/PyMouse/video/"
-        self.target_path = "/mnt/lab/data/OpenField/"
+        self.source_path = self.logger.source_path
+        self.target_path = self.logger.target_path
         self.logger_timer = self.logger.logger_timer
         self.process_queue = process_queue
     
@@ -210,12 +210,11 @@ class Camera:
         )
 
         if self.logger is not None:
-            filename_tmst, self.dataset = self.logger.createDataset(
-                self.source_path,
-                self.target_path,
+            self.dataset = self.logger.createDataset(
                 dataset_name="frame_tmst",
                 dataset_type=np.dtype([("tmst", np.double)]),
                 filename=self.filename_tmst,
+                log = False
             )
 
         self.frame_queue = Queue()
