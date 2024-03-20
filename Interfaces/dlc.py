@@ -507,7 +507,7 @@ class DLC:
         angle_degrees = np.degrees(angle)
         return angle_degrees
 
-    def move_hdf(self):
+    def move_files(self):
         """
         Find which files from the source_path are not in the target path and
         copy them.
@@ -533,5 +533,5 @@ class DLC:
         self.sm.close()
         self.sm.unlink()
         self.logger.closeDatasets()
-        self.move_hdf()
+        self.move_files()
         self.dlc_live_process.terminate()
