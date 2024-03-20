@@ -236,10 +236,10 @@ class Logger:
                     dataset_name: str,
                     dataset_type: type,
                     filename: Optional[str] = None,
-                    log=True,
-                ) -> Tuple[str, Any]:
+                    log: Optional[bool]=True,
+                ) -> Any:
         """
-        Create a dataset and return the filename and dataset object.
+        Create a dataset and return the dataset object.
         Args:
             target_path (str): The target path for the dataset.
             dataset_name (str): The name of the dataset.
@@ -247,12 +247,13 @@ class Logger:
             filename (str, optional): The filename for the dataset. If not provided, 
             a default filename will be generated based on the dataset name, animal ID, 
             session, and current timestamp.
-            log (bool): If True call the log_recording
+            log (bool, optional): If True call the log_recording
         Returns:
             Tuple[str, Any]: A tuple containing the filename and the dataset object.
         """
-
-        path = self.source_path + 'Recordings/%d_%d/' % (self.trial_key['animal_id'], self.trial_key['session'])
+        folder = (f"Recordings/{self.trial_key['animal_id']}"
+                  f"_{self.trial_key['session']}/")
+        path = self.source_path + folder
         if not os.path.isdir(path):
             os.makedirs(path) # create path if necessary
 
@@ -260,7 +261,7 @@ class Logger:
             print('No target directory set! Autocopying will not work.')
             target_path = False
         else:
-            target_path = self.target_path + '%d_%d/' % (self.trial_key['animal_id'], self.trial_key['session'])
+            target_path = self.target_path + folder
             if not os.path.isdir(target_path):
                 os.makedirs(target_path)
 
