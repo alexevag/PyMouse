@@ -1,7 +1,7 @@
 from core.Logger import *
 import itertools
 import matplotlib.pyplot as plt
-
+from utils.helper_functions import generate_conf_list
 
 class State:
     state_timer, __shared_state = Timer(), {}
@@ -77,8 +77,8 @@ class ExperimentClass:
         state_control.run()
 
     def stop(self):
-        self.release()
         self.stim.exit()
+        self.release()
         self.beh.exit()
         self.logger.ping(0)
         if self.sync:
@@ -186,7 +186,7 @@ class ExperimentClass:
                 else: self.logger.put(table=ctable, tuple=cond.copy(), schema=schema, priority=insert_priority)
                 insert_priority += 1
         return conditions
-    
+
     def _anti_bias(self, choice_h, un_choices):
         choice_h = np.array([make_hash(c) for c in choice_h[-self.params['bias_window']:]])
         if len(choice_h) < self.params['bias_window']: choice_h = self.choices
@@ -402,7 +402,7 @@ class Trial(dj.Manual):
 
 
 @experiment.schema
-class SetupConfiguration(dj.Lookup):
+class SetupConfiguration(dj.Lookup, dj.Manual):
     definition = """
     # Setup configuration
     setup_conf_idx           : tinyint                                            # configuration version
@@ -411,9 +411,12 @@ class SetupConfiguration(dj.Lookup):
     discription              : varchar(256)
     """
 
-    class Port(dj.Part):
+    contents = [[0, 'DummyPorts', 'Simulation'],]
+
+    class Port(dj.Lookup, dj.Part):
         definition = """
-        # Probe identity
+        # Probe identityrepeat_n = 1
+
         port                     : tinyint                      # port id
         type="Lick"              : enum('Lick','Proximity')     # port type
         -> SetupConfiguration
@@ -425,7 +428,11 @@ class SetupConfiguration(dj.Lookup):
         discription              : varchar(256)
         """
 
-    class Screen(dj.Part):
+        contents = [[1,'Lick', 0, 0 , 1, 1, 0, 'probe'],
+                    [2,'Lick', 0, 0 , 1, 1, 0, 'probe'],
+                    [3,'Proximity', 0, 1 , 0, 0, 0, 'probe']]
+
+    class Screen(dj.Lookup, dj.Part):
         definition = """
         # Screen information
         screen_idx               : tinyint
@@ -441,14 +448,12 @@ class SetupConfiguration(dj.Lookup):
         resolution_x             : smallint
         resolution_y             : smallint
         description              : varchar(256)
-        reward_color             : tinyblob
-        punish_color             : tinyblob
-        ready_color              : tinyblob
-        background_color         : tinyblob
-        start_color              : tinyblob
+        fullscreen               : tinyint
         """
 
-    class Ball(dj.Part):
+        contents = [[1,0, 64, 5.0, 0, -0.1, 1.66, 7.0, 30, 800, 480, 'Simulation', 0],]
+
+    class Ball(dj.Lookup, dj.Part):
         definition = """
         # Ball information
         -> SetupConfiguration
@@ -459,7 +464,7 @@ class SetupConfiguration(dj.Lookup):
         discription              : varchar(256)
         """
 
-    class Speaker(dj.Part):
+    class Speaker(dj.Lookup, dj.Part):
         definition = """
         # Speaker information
         speaker_idx             : tinyint
@@ -471,7 +476,7 @@ class SetupConfiguration(dj.Lookup):
         discription             : varchar(256)
         """
 
-    class Camera(dj.Part):
+    class Camera(dj.Lookup, dj.Part):
         definition = """
         # Camera information
         camera_idx               : tinyint
@@ -509,7 +514,6 @@ class Control(dj.Lookup):
     ip=null                     : varchar(16)                  # setup IP address
     """
 
-
 @experiment.schema
 class Task(dj.Lookup):
     definition = """
@@ -521,10 +525,7 @@ class Task(dj.Lookup):
     timestamp                   : timestamp    
     """
 
-    contents = [[0, 'calibrate_ports.py', 'Test calibration protocol', '2021-01-01 00:00:00'],
-                [1, 'free_water.py'     , 'Test free water protocol', '2021-01-01 00:00:00'],
-                [2, 'grating_test.py'   , 'Test grating discimination protocol', '2021-01-01 00:00:00']]
-
+    contents = generate_conf_list("conf/")
 
 @mice.schema
 class MouseWeight(dj.Manual):

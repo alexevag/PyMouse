@@ -5,8 +5,8 @@ import os
 from itertools import product
 from multiprocessing.shared_memory import SharedMemory
 from typing import Any, Dict, List
-
 import numpy as np
+from datetime import datetime
 
 try:
     import yaml
@@ -156,6 +156,14 @@ class DictStruct:
     def values(self):
         return self.__dict__.values()
 
+
+def generate_conf_list(folder_path):
+    contents = []
+    files = os.listdir(folder_path)
+    current_datetime = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    for i, file_name in enumerate(files):
+        contents.append([i, file_name, '', current_datetime])
+    return contents
 
 def read_yalm(path:str, filename:str, variable:str) -> Any:
     """
