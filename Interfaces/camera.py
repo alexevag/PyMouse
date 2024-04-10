@@ -7,7 +7,7 @@ import time
 import warnings
 from datetime import datetime
 from queue import Queue
-from typing import Optional, Tuple
+from typing import Optional, Tuple, List
 
 import numpy as np
 
@@ -84,22 +84,29 @@ class Camera:
         self.animal_id = self.logger.trial_key["animal_id"]
         self.session = self.logger.trial_key["session"]
         self.filename = f"animal_id_{self.animal_id}_session_{self.session}"
-        self.source_path = self.logger.source_path
-        self.target_path = self.logger.target_path
+        self.folder = (
+            f"{self.logger.trial_key['animal_id']}"
+            f"_{self.logger.trial_key['session']}/"
+        )
+        self.source_path = self.logger.video_source_path
+        self.target_path = self.logger.video_target_path
         self.logger_timer = self.logger.logger_timer
         self.process_queue = process_queue
-    
+
         camera_params = self.logger.get(
             table="SetupConfiguration.Camera",
             key=f"setup_conf_idx={self.exp.params['setup_conf_idx']}",
             as_dict=True,
         )[0]
         self.resolution = (camera_params["resolution_x"], camera_params["resolution_y"])
-        
+
         if not globals()["IMPORT_SKVIDEO"]:
             raise ImportError(
                 "you need to install the skvideo: sudo pip3 install sk-video"
             )
+
+        if not os.path.isdir(self.source_path + self.folder):
+            os.makedirs(self.source_path + self.folder) # create path if necessary
 
         # log video recording
         self.logger.log_recording(
@@ -173,31 +180,40 @@ class Camera:
 
         self._target_path = target_path
 
-    def clear_local_videos(self):
+    def clear_local_folders(self) -> None:
         """
-        Move video files from source_path to target_path.
+        Move folders from source_path to target_path if they don't exist in the target path.
         """
         if os.path.exists(self.source_path):
-            files = [
-                file for _, _, files in os.walk(self.source_path) for file in files
+            # Get list of folders in source path
+            source_folders: List[str] = [
+                folder
+                for folder in os.listdir(self.source_path)
+                if os.path.isdir(os.path.join(self.source_path, folder))
             ]
-            files_target = [
-                file for _, _, files in os.walk(self.target_path) for file in files
+            # Get list of folders in target path
+            target_folders: List[str] = [
+                folder
+                for folder in os.listdir(self.target_path)
+                if os.path.isdir(os.path.join(self.target_path, folder))
             ]
-            for file in files:
-                if file not in files_target:
-                    shutil.copy2(
-                        os.path.join(self.source_path, file),
-                        os.path.join(self.target_path, file),
+            # Iterate over source folders
+            for folder in source_folders:
+                # Check if the folder doesn't exist in the target path
+                if folder not in target_folders:
+                    # Copy the folder from source to target
+                    shutil.copytree(
+                        os.path.join(self.source_path, folder),
+                        os.path.join(self.target_path, folder),
                     )
-                    print(f"Transferred file: {file}")
+                    print(f"Transferred folder: {folder}")
 
     def setup(self):
         """
         Set up the camera and frame processing threads.
         """
         self.video_output = FFmpegWriter(
-            self.source_path + self.filename + ".mp4",
+            self.source_path + self.folder  + self.filename + ".mp4",
             inputdict={
                 "-r": str(self.fps),
             },
@@ -214,7 +230,7 @@ class Camera:
                 dataset_name="frame_tmst",
                 dataset_type=np.dtype([("tmst", np.double)]),
                 filename=self.filename_tmst,
-                log = False
+                log=False,
             )
 
         self.frame_queue = Queue()
@@ -425,7 +441,7 @@ class WebCam(Camera):
         super().stop_rec()
 
         # Remove local video files
-        self.clear_local_videos()
+        self.clear_local_folders()
 
 
 class PiCamera(Camera):
