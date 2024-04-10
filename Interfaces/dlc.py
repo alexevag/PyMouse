@@ -8,7 +8,7 @@ from multiprocessing.shared_memory import SharedMemory
 
 import cv2
 import numpy as np
-from cv2 import getAffineTransform, invertAffineTransform
+from cv2 import getPerspectiveTransform
 from dlclive import DLCLive, Processor
 
 from utils.helper_functions import read_yalm
@@ -80,8 +80,8 @@ class DLC:
         self.logger = logger
         folder = (f"Recordings/{self.logger.trial_key['animal_id']}"
                   f"_{self.logger.trial_key['session']}/")
-        self.source_path = self.logger.source_path + folder
-        self.target_path = self.logger.target_path + folder
+        self.source_path = self.logger.video_source_path + folder
+        self.target_path = self.logger.video_target_path + folder
         self.joints = read_yalm(
             path= self.model_path,
             filename="pose_cfg.yaml",
@@ -103,28 +103,29 @@ class DLC:
             )
         )
 
-        self.filename_dlc_infer = "dlc_infer_" + h5s_filename
-        self.logger.log_recording(
-            dict(
-                rec_aim="openfield",
-                software="EthoPy",
-                version="0.1",
-                filename=self.filename_dlc_infer,
-                source_path=self.source_path,
-                target_path=self.target_path,
-            )
-        )
-        self.filename_dlc_processed = "dlc_processed_" + h5s_filename
-        self.logger.log_recording(
-            dict(
-                rec_aim="openfield",
-                software="EthoPy",
-                version="0.1",
-                filename=self.filename_dlc_processed,
-                source_path=self.source_path,
-                target_path=self.target_path,
-            )
-        )
+        # self.filename_dlc_infer = "dlc_infer_" + h5s_filename
+        # self.logger.log_recording(
+        #     dict(
+        #         rec_aim="openfield",
+        #         software="EthoPy",
+        #         version="0.1",
+        #         filename=self.filename_dlc_infer,
+        #         source_path=self.source_path,
+        #         target_path=self.target_path,
+        #     )
+        # )
+        # self.filename_dlc_processed = "dlc_processed_" + h5s_filename
+        # self.logger.log_recording(
+        #     dict(
+        #         rec_aim="openfield",
+        #         software="EthoPy",
+        #         version="0.1",
+        #         filename=self.filename_dlc_processed,
+        #         source_path=self.source_path,
+        #         target_path=self.target_path,
+        #     )
+        # )
+
         self.screen_size = 310
         self.screen_pos = np.array(
             [[self.screen_size, 0], [self.screen_size, self.screen_size]]
@@ -167,13 +168,13 @@ class DLC:
                 dataset_name="dlc",
                 dataset_type=np.dtype(joints_types),
                 filename=self.filename_dlc,
-                log = True
+                log = False
             )
 
             self.pose_hdf5_infer = self.logger.createDataset(
                 dataset_name="dlc_infer",
                 dataset_type=np.dtype(joints_types),
-                filename=self.filename_dlc_infer,
+                filename=self.filename_dlc,
                 log = False
             )
 
@@ -187,7 +188,7 @@ class DLC:
             self.pose_hdf5_processed = self.logger.createDataset(
                 dataset_name="dlc_processed",
                 dataset_type=np.dtype(joints_types_processed),
-                filename=self.filename_dlc_processed,
+                filename=self.filename_dlc,
                 log = False
             )
 
@@ -266,12 +267,12 @@ class DLC:
         Returns:
             _type_: _description_
         """
-        pts1 = np.float32([corners[0][:2], corners[1][:2], corners[2][:2]])
+        pts1 = np.float32([corners[0][:2], corners[1][:2], corners[2][:2], corners[3][:2]])
+        pts2 = np.float32([[0, 0], [screen_size, 0], [0, screen_size], [screen_size, screen_size]])
 
-        pts2 = np.float32([[0, 0], [screen_size, 0], [0, screen_size]])
+        m = getPerspectiveTransform(pts1, pts2)  # image to real
+        m_inv = np.linalg.inv(m)
 
-        m = getAffineTransform(pts1, pts2)  # image to real
-        m_inv = invertAffineTransform(m)  # real to image
         return m, m_inv
 
     def screen_dimensions(self, diagonal_inches, aspect_ratio=16 / 9):
@@ -484,14 +485,9 @@ class DLC:
             vector_to_nose, np.array([1, 0])
         )  # Assuming reference vector is [1, 0]
 
-        centroid_triangle = np.dot(
-            self.M,
-            np.array([centroid_triangle[0], centroid_triangle[1], 1]),
-        )
-        # centroid_triangle = np.dot(
-        #     self.M,
-        #     np.array([pose[0, 0], pose[0, 1], 1]),
-        # )
+        point = np.array([[centroid_triangle[0], centroid_triangle[1]]], dtype=np.float32)
+        centroid_triangle = cv2.perspectiveTransform(np.array([point]),self.M).ravel()
+
         return tmst, centroid_triangle[0], centroid_triangle[1], angle
 
     def find_centroid(self, vertices):
@@ -507,31 +503,10 @@ class DLC:
         angle_degrees = np.degrees(angle)
         return angle_degrees
 
-    def move_files(self):
-        """
-        Find which files from the source_path are not in the target path and
-        copy them.
-        """
-        if os.path.exists(self.source_path):
-            files = [
-                file for _, _, files in os.walk(self.source_path) for file in files
-            ]
-            files_target = [
-                file for _, _, files in os.walk(self.target_path) for file in files
-            ]
-            for file in files:
-                if file not in files_target:
-                    shutil.copy2(
-                        os.path.join(self.source_path, file),
-                        os.path.join(self.target_path, file),
-                    )
-                    print(f"Transferred file: {file}")
-
     def stop(self):
         """stop processing"""
         self.close.set()
         self.sm.close()
         self.sm.unlink()
         self.logger.closeDatasets()
-        self.move_files()
         self.dlc_live_process.terminate()
