@@ -59,7 +59,8 @@ class Logger:
         self.logger_timer.start()
         self.Writer = Writer
         self.rec_fliptimes = True
-
+        self.video_source_path =   dj.config['video_source_path']
+        self.video_target_path =   dj.config['video_target_path']
         # set up paths
         if 'source_path' in dj.config and not os.path.isdir(dj.config['source_path']):
             self.source_path = dj.config['source_path']
@@ -274,8 +275,9 @@ class Logger:
                 datetime.now().strftime("%Y-%m-%d-%H-%M-%S"),
             )
         # Create dataset
-        self.datasets[dataset_name] = self.Writer(path + filename, target_path)
-        self.datasets[dataset_name].createDataset(
+        if filename not in self.datasets:
+            self.datasets[filename] = self.Writer(path + filename, target_path)
+        self.datasets[filename].createDataset(
             dataset_name, shape=(1,), dtype=dataset_type
         )
 
@@ -284,7 +286,7 @@ class Logger:
                         filename=filename, source_path=path, target_path=target_path)
             self.log_recording(rec_key)
 
-        return self.datasets[dataset_name]
+        return self.datasets[filename]
 
     def closeDatasets(self):
         for dataset in self.datasets:
