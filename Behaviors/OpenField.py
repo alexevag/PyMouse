@@ -144,9 +144,11 @@ class OpenField(Behavior, dj.Manual):
 
         # find real position of the objects
         self.response_locs = self.screen_pos_to_real_pos(
-            self.curr_cond["response_loc_x"]
+            self.curr_cond["response_loc_x"], const_dim=self.screen_size
         )
-        self.rew_locs = self.screen_pos_to_real_pos((self.curr_cond["reward_loc_x"],))
+        self.rew_locs = self.screen_pos_to_real_pos(
+            self.curr_cond["reward_loc_x"], const_dim=self.screen_size
+        )
 
         self.position_tmst = 0
         self.resp_position_idx = -1
@@ -275,9 +277,7 @@ class OpenField(Behavior, dj.Manual):
             self.log_reward(self.reward_amount[licked_port])
             # self.update_history(self.response.port, self.reward_amount[self.licked_port])
             # TODO: use response loc in the history
-            self.update_history(
-                licked_port, self.reward_amount[licked_port]
-            )
+            self.update_history(licked_port, self.reward_amount[licked_port])
             return True
         return False
 
