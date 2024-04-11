@@ -11,7 +11,7 @@ import numpy as np
 from cv2 import getPerspectiveTransform
 from dlclive import DLCLive, Processor
 
-from utils.helper_functions import read_yalm
+from utils.helper_functions import get_display_width_height, read_yalm
 
 np.set_printoptions(suppress=True)
 
@@ -103,34 +103,15 @@ class DLC:
             )
         )
 
-        # self.filename_dlc_infer = "dlc_infer_" + h5s_filename
-        # self.logger.log_recording(
-        #     dict(
-        #         rec_aim="openfield",
-        #         software="EthoPy",
-        #         version="0.1",
-        #         filename=self.filename_dlc_infer,
-        #         source_path=self.source_path,
-        #         target_path=self.target_path,
-        #     )
-        # )
-        # self.filename_dlc_processed = "dlc_processed_" + h5s_filename
-        # self.logger.log_recording(
-        #     dict(
-        #         rec_aim="openfield",
-        #         software="EthoPy",
-        #         version="0.1",
-        #         filename=self.filename_dlc_processed,
-        #         source_path=self.source_path,
-        #         target_path=self.target_path,
-        #     )
-        # )
-
-        self.screen_size = 310
-        self.screen_pos = np.array(
-            [[self.screen_size, 0], [self.screen_size, self.screen_size]]
-        )
-
+        # get screen parameters
+        screen_params = self.logger.get(
+            table="SetupConfiguration.Screen",
+            key=f"setup_conf_idx={self.exp.params['setup_conf_idx']}",
+            as_dict=True,
+        )[0]
+        self.screen_width, _  = get_display_width_height(screen_params['size'],
+                                                    screen_params['aspect'])
+        
         self.frame_process = frame_process
         self.dlc_queue = dlc_queue
 
@@ -148,6 +129,17 @@ class DLC:
             args=(self.frame_process, self.dlc_queue),
         )
         self.dlc_live_process.start()
+
+        # wait until the dlc setup hass finished initialization before start the experiment
+        start_time = time.time()
+        while not self.setup_ready.is_set():
+            elapsed_time = time.time() - start_time
+            for char in '|/-\\':
+                sys.stdout.write(
+                    f'\rWaiting for the initialization of dlc... {int(elapsed_time)}s {char}'
+                    )
+                sys.stdout.flush()
+                time.sleep(0.1)
 
     def setup(self, frame_process, dlc_queue):
         """
@@ -195,7 +187,7 @@ class DLC:
         self.frame_process = frame_process
         # find corners of the arena
         self.corners = self.find_corners()
-        self.M, self.M_inv = self.affine_transform(self.corners, self.screen_size)
+        self.M, self.M_inv = self.perspective_transform(self.corners, self.screen_width)
         dlc_queue.put((self.M, self.corners))
         # initialize dlc models
         self.dlc_live = DLCLive(self.model_path, processor=self.dlc_proc)
@@ -257,7 +249,7 @@ class DLC:
 
         return corners
 
-    def affine_transform(self, corners, screen_size):
+    def perspective_transform(self, corners, screen_size):
         """_summary_
 
         Args:
@@ -274,25 +266,6 @@ class DLC:
         m_inv = np.linalg.inv(m)
 
         return m, m_inv
-
-    def screen_dimensions(self, diagonal_inches, aspect_ratio=16 / 9):
-        """returns the width and height of a screen based on ints
-        diagonal
-
-        Args:
-            diagonal_inches (float): the diagonal of the screen in inch
-            aspect_ratio (float, optional): Defaults to 16/9.
-
-        Returns:
-            float, float: height, width
-        """
-        diagonal_cm = diagonal_inches * 2.54
-
-        # Calculate the width (x) and height (y) using the Pythagorean theorem
-        x_cm = np.sqrt((diagonal_cm**2) / (1 + aspect_ratio**2))
-        y_cm = aspect_ratio * x_cm
-
-        return x_cm, y_cm
 
     def rotate_point(self, origin, point, angle_rad):
         """
