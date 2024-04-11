@@ -72,10 +72,7 @@ class SerialPorts(Interface):
 
     def _lick_port_activated(self, port):
         """Handle activation of the lick port and log the corresponding activity."""
-        resp_time = self.logger.logger_timer.elapsed_time()
-        if self.resp_tmst == resp_time:
-            return
-        self.resp_tmst = resp_time
+        self.resp_tmst = self.logger.logger_timer.elapsed_time()
         self.response = self.ports[Port(type="Lick", port=port) == self.ports][0]
         self.beh.log_activity({**self.response.__dict__, "time": self.resp_tmst})
 
