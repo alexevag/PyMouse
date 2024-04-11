@@ -2,11 +2,16 @@ import base64
 import functools
 import hashlib
 import os
-from itertools import product
-from multiprocessing.shared_memory import SharedMemory
-from typing import Any, Dict, List
-import numpy as np
+import sys
+import threading
+import time
 from datetime import datetime
+from itertools import product
+from multiprocessing import Event as ProcessEvent
+from multiprocessing.shared_memory import SharedMemory
+from typing import Any, Dict, List, Tuple, Union
+
+import numpy as np
 
 try:
     import yaml
@@ -229,3 +234,51 @@ def shared_memory_array(name: str, rows_len: int, columns_len: int, dtype: str =
     shared_array.fill(0)
 
     return shared_array, sm
+
+def get_display_width_height(size: float, aspect_ratio: float) -> Tuple[float, float]:
+    """
+    Calculate the width and height of the screen in millimeters.
+
+    Args:
+        size (float): The diagonal size of the display in inches.
+        aspect_ratio (float): The aspect ratio of the display.
+
+    Returns:
+        Tuple[float, float]: The width and height of the screen in millimeters.
+    """
+    # Calculate the diagonal size of the screen in millimeters
+    screen_diagonal_mm = size * 25.4
+
+    # Calculate the height of the screen in millimeters
+    height = screen_diagonal_mm / np.sqrt(aspect_ratio**2 + 1)
+
+    # Calculate the width of the screen in millimeters
+    width = aspect_ratio * height
+
+    return round(width, 2), round(height, 2)
+
+def wait_for_flag(msg: str, flag: Union[threading.Event, ProcessEvent]) -> float:
+    """
+    Waits until the specified flag is set, printing a message and elapsed time.
+
+    Args:
+        msg (str): The message to be printed while waiting.
+        flag: The event indicating whether the condition is met. It can be either threading.Event
+        or multiprocessing.Event.
+
+    Returns:
+        float: elapsed time
+    """
+    if flag.is_set():
+        return 0.  # If the flag is already set, return 0 as elapsed time
+
+    start_time = time.time()
+    while not flag.is_set():
+        elapsed_time = time.time() - start_time
+        for char in '|/-\\':
+            sys.stdout.write(
+                f'\r{msg}... {int(elapsed_time)}s {char}'
+            )
+            sys.stdout.flush()
+            time.sleep(0.1)
+    return elapsed_time
