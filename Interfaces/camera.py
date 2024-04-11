@@ -7,7 +7,7 @@ import time
 import warnings
 from datetime import datetime
 from queue import Queue
-from typing import Optional, Tuple, List
+from typing import List, Optional, Tuple
 
 import numpy as np
 
@@ -106,7 +106,7 @@ class Camera:
             )
 
         if not os.path.isdir(self.source_path + self.folder):
-            os.makedirs(self.source_path + self.folder) # create path if necessary
+            os.makedirs(self.source_path + self.folder)  # create path if necessary
 
         # log video recording
         self.logger.log_recording(
@@ -213,7 +213,7 @@ class Camera:
         Set up the camera and frame processing threads.
         """
         self.video_output = FFmpegWriter(
-            self.source_path + self.folder  + self.filename + ".mp4",
+            self.source_path + self.folder + self.filename + ".mp4",
             inputdict={
                 "-r": str(self.fps),
             },
@@ -394,6 +394,12 @@ class WebCam(Camera):
         # Append the timestamp to the 'frame_tmst' h5 dataset
         self.dataset.append("frame_tmst", [np.double(item[0])])
 
+    def camera_opened(self, camera):
+        """Check if the camera is opened."""
+        if not camera.isOpened():
+            raise RuntimeError("Camera is not opened. Cannot proceed.")
+        return True
+
     def rec(self):
         """
         Continuously capture video frames, update timestamp, and enqueue frames for processing.
@@ -408,19 +414,26 @@ class WebCam(Camera):
         self.recording.set()
         # first_tmst = self.logger_timer.elapsed_time()
         # cam_tmst_first = self.camera.get(cv2.CAP_PROP_POS_MSEC)
-        while not self.stop.is_set():
-            check, image = self.get_frame()
+        while not self.stop.is_set() and self.camera_opened(self.camera):
+            try:
+                check, image = self.get_frame()
+                if not check:
+                    continue
+                # Process the frame here
+            except RuntimeError as e:
+                print("Failed to read frame from camera. Error:", e)
+                continue
             tmst = self.logger_timer.elapsed_time()
             # tmst = first_tmst + (self.camera.get(cv2.CAP_PROP_POS_MSEC)-cam_tmst_first)
-            self.iframe += 1
-            if check:
-                self.frame_queue.put((tmst, image))
-                # Check if a separate process queue is provided
-                if self.process_queue is not False:
-                    # Ensure the process queue doesn't exceed its maximum size
-                    if self.process_queue.full():
-                        self.process_queue.get()
-                    self.process_queue.put_nowait((tmst, image))
+            # self.iframe += 1
+            self.frame_queue.put((tmst, image))
+            # Check if a separate process queue is provided
+            if self.process_queue is not False:
+                # Ensure the process queue doesn't exceed its maximum size
+                if self.process_queue.full():
+                    self.process_queue.get()
+                self.process_queue.put_nowait((tmst, image))
+
         self.camera.release()
         self.recording.clear()
 
