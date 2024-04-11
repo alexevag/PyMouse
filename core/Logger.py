@@ -245,7 +245,7 @@ class Logger:
             target_path (str): The target path for the dataset.
             dataset_name (str): The name of the dataset.
             dataset_type (type): The datatype of the dataset.
-            filename (str, optional): The filename for the dataset. If not provided, 
+            filename (str, optional): The filename for the h5 file. If not provided, 
             a default filename will be generated based on the dataset name, animal ID, 
             session, and current timestamp.
             log (bool, optional): If True call the log_recording
@@ -274,9 +274,12 @@ class Logger:
                 self.trial_key["session"],
                 datetime.now().strftime("%Y-%m-%d-%H-%M-%S"),
             )
-        # Create dataset
+
         if filename not in self.datasets:
+            # create h5 file if not exists
             self.datasets[filename] = self.Writer(path + filename, target_path)
+
+        # create new dataset in the h5 files
         self.datasets[filename].createDataset(
             dataset_name, shape=(1,), dtype=dataset_type
         )
