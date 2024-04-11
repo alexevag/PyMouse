@@ -58,13 +58,14 @@ class DLC:
         model_path: str,
         shared_memory_shape,
         logger,
+        arena_size,
     ):
         self.model_path = model_path
         self.nose_y = 0
         self.theta = 0
         self.timestamp = 0
         self.rot_angle = self.calculate_rotation_angle(side=1, base=0.8)
-
+        self.arena_size = arena_size
 
         # attach another shared memory block
         self.sm = SharedMemory("pose")
@@ -103,15 +104,6 @@ class DLC:
             )
         )
 
-        # get screen parameters
-        screen_params = self.logger.get(
-            table="SetupConfiguration.Screen",
-            key=f"setup_conf_idx={self.exp.params['setup_conf_idx']}",
-            as_dict=True,
-        )[0]
-        self.screen_width, _  = get_display_width_height(screen_params['size'],
-                                                    screen_params['aspect'])
-        
         self.frame_process = frame_process
         self.dlc_queue = dlc_queue
 
@@ -132,6 +124,7 @@ class DLC:
 
         # wait until the dlc setup hass finished initialization before start the experiment
         start_time = time.time()
+
         while not self.setup_ready.is_set():
             elapsed_time = time.time() - start_time
             for char in '|/-\\':
@@ -187,7 +180,7 @@ class DLC:
         self.frame_process = frame_process
         # find corners of the arena
         self.corners = self.find_corners()
-        self.M, self.M_inv = self.perspective_transform(self.corners, self.screen_width)
+        self.M, self.M_inv = self.perspective_transform(self.corners, self.arena_size)
         dlc_queue.put((self.M, self.corners))
         # initialize dlc models
         self.dlc_live = DLCLive(self.model_path, processor=self.dlc_proc)
