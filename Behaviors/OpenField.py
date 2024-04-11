@@ -289,7 +289,7 @@ class OpenField(Behavior, dj.Manual):
         Returns:
             bool: True if rewarded, False otherwise
         """
-s
+
         licked_port = self.is_licking(since=tmst, reward=True)
         if licked_port:
             self.interface.give_liquid(licked_port)
