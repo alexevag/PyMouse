@@ -39,26 +39,6 @@ except ImportError:
 class Camera:
     """
     A meta-class for capturing and recording video from different sources.
-
-    Args:
-        source_path (str, optional): The path(local for speed) where video frames
-        will be saved. Defaults to None.
-        target_path (str, optional): The path where recorded videos will be
-        stored (copy from source_path). Defaults to None.
-        filename (str, optional): The filename for recorded videos. Defaults to None.
-        fps (int, optional): Frames per second for recording. Defaults to 30.
-        logger_timer (Timer, optional): A common timer with experiment module for
-        logging the frame timestamps. Defaults to None.
-        process_queue (Queue): Additional keyword arguments.
-
-    Attributes:
-        initialized (threading.Event)
-        recording (multyprocessing.Event)
-        stop
-
-    Raises:
-        ImportError: If required modules are not installed.
-
     """
 
     def __init__(
@@ -119,7 +99,10 @@ class Camera:
                 target_path=self.target_path,
             )
         )
-        h5s_filename = f"animal_id_{self.logger.trial_key['animal_id']}_session_{self.logger.trial_key['session']}.h5"
+        h5s_filename = (
+            f"animal_id_{self.logger.trial_key['animal_id']}"
+            f"_session_{self.logger.trial_key['session']}.h5"
+        )
         self.filename_tmst = "video_tmst_" + h5s_filename
         self.logger.log_recording(
             dict(
