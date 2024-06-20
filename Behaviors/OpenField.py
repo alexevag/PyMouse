@@ -83,18 +83,6 @@ class OpenField(Behavior, dj.Manual):
         )
         self.shared_memory_shape = (1, 4)
 
-        self.response_locs = []
-        self.reward_locs = []
-        self.init_loc = []
-        self.position_tmst = 0
-        self.resp_position_idx = -1
-        self.affine_matrix = []
-        self.corners = []
-
-    def setup(self, exp):
-        """setup is running one time at each session"""
-        super(OpenField, self).setup(exp)
-        
         # get screen parameters
         screen_params = self.logger.get(
             table="SetupConfiguration.Screen",
@@ -107,6 +95,17 @@ class OpenField(Behavior, dj.Manual):
         self.screen_pos = np.array(
             [[self.screen_width, 0], [self.screen_width, self.screen_width]]
         )
+
+        self.response_locs = []
+        self.reward_locs = []
+        self.position_tmst = 0
+        self.affine_matrix = []
+        self.corners = []
+        self.response_loc = ()
+
+    def setup(self, exp):
+        """setup is running one time at each session"""
+        super(OpenField, self).setup(exp)
 
         # start camera recording process
         self.cam = WebCam(
@@ -139,10 +138,8 @@ class OpenField(Behavior, dj.Manual):
 
     def prepare(self, condition):
         """prepare runs one time at the start of each a trial"""
-        self.logged_pos = False
-        self._resp_loc = -1
-        self.in_position_flag = False
 
+        self.position_tmst = 0
         super().prepare(condition)
 
         # find real position of the objects
@@ -152,22 +149,12 @@ class OpenField(Behavior, dj.Manual):
         self.reward_locs = self.screen_pos_to_real_pos(
             self.curr_cond["reward_loc_x"], const_dim=self.screen_width
         )
-        self.init_loc = [[self.curr_cond["init_loc_x"], self.curr_cond["init_loc_y"]]]
 
-        self.position_tmst = 0
-        self.resp_position_idx = -1
-
-    def is_ready_start(self):
+    def in_location(self, locs, radius):
         self.tmst_cur, self.x_cur, self.y_cur, self.angle_cur = self.pose[0]
-        return self.position_in_radius([self.x_cur, self.y_cur],
-                                       self.init_loc,
-                                       self.curr_cond["init_radius"]) != -1
+        return self.position_in_radius([self.x_cur, self.y_cur], locs, radius)
 
-    def in_location(self, loc, radius):
-        self.tmst_cur, self.x_cur, self.y_cur, self.angle_cur = self.pose[0]
-        return self.position_in_radius([self.x_cur, self.y_cur], loc,  radius) != -1
-
-    def log_loc_activity(self, in_pos: int) -> None:
+    def log_loc_activity(self, in_pos: int, response_loc) -> None:
         """Log activity with the given in_pos value.
 
         Args:
@@ -182,8 +169,8 @@ class OpenField(Behavior, dj.Manual):
             "animal_loc_y": self.y_cur,
             "time": self.tmst_cur,
             "in_pos": in_pos,
-            "resp_loc_x": self._resp_loc[0],
-            "resp_loc_y": self._resp_loc[1],
+            "resp_loc_x": response_loc[0],
+            "resp_loc_y": response_loc[1],
         }
         key = {**self.logger.trial_key, **act}
         self.logger.log("Activity", key, schema="behavior", priority=10)
@@ -198,9 +185,70 @@ class OpenField(Behavior, dj.Manual):
 
         if indices_within_radius.size > 0:
             # Return the index of the first position within the radius
-            return indices_within_radius[0]
+            return positions[indices_within_radius[0]]
+
+        return None  # Return None if no position is within the radius
+
+    def in_response_loc(self, duration: int, radius: float = 0.0):
+        """check if the animal position has been in a specific location"""
+        # self.update_locations()
+        self.response_loc = self.in_location(
+            self.response_locs, radius
+        )
+        # TODO if the reponse loc change it will take it as a new response 
+        # loc to reset the position_tmst
+        if self.response_loc is not None:
+            # log position on only when it enters the location
+            # which is when the position_tmst equal 0
+            if self.position_tmst == 0:
+                self.position_tmst = time.time()
+                self.log_loc_activity(1, self.response_loc)
+        # log position off only in case it was in a response location
+        # which is when the position_tmst!=0
+        elif self.position_tmst != 0:
+            self.position_tmst = 0
+            self.log_loc_activity(0, self.response_loc)
+
+        if self.is_ready(duration):
+            return self.response_loc
+        return 0
+
+    # def update_locations(self):
+    #     # print(
+    #     #     "self.get_resp_obj_pos(self.resp_objs) ",
+    #     #     self.get_resp_obj_pos(self.resp_objs),
+    #     # )
+    #     # print(
+    #     #     "self.get_resp_obj_pos(self.reward_objs) ",
+    #     #     self.get_resp_obj_pos(self.reward_objs),
+    #     # )
+
+    #     self.response_locs = self.screen_pos_to_real_pos(
+    #         self.get_obj_pos(self.resp_objs), self.screen_width
+    #     )
+    #     self.reward_locs = self.screen_pos_to_real_pos(
+    #         self.get_obj_pos(self.reward_objs), self.screen_width
+    #     )
+    #     self.response_obj_loc_dict = dict(
+    #         zip(self.response_locs, self.curr_cond["response_loc_x"])
+    #     )
+
+    # def get_obj_pos(self, objs_ids):
+    #     return [self.objects[obj].get_x_Pos for obj in objs_ids]
+
+    def is_ready(self, duration, since=False):
+        # if response_ready<=0 means there is no need to wait in reponse loc
+        if duration <= 0:
+            return True
+        elif self.position_tmst == 0:
+            return False
+        elif since:
+            return self.position_tmst > since and (time.time() - self.position_tmst) > (
+                duration / 1000
+            )
         else:
-            return -1  # Return -1 if no position is within the radius
+            # if response_ready has pass in the duration return True
+            return (time.time() - self.position_tmst) > (duration / 1000)
 
     def is_correct(self):
         """Check if the response location is correct.
@@ -208,57 +256,12 @@ class OpenField(Behavior, dj.Manual):
         Returns:
             bool: True if the response location is in the reward locations, False otherwise.
         """
-        if self._resp_loc!=-1:
-            self.log_loc_activity(1)
-            if self._resp_loc in self.reward_locs:
-                print("correct location ", self._resp_loc)
-                return True
-        return False
-
-    def get_response(self, duration:int):
-        """check if the animal position has been in a specific location"""
-        # self.update_locations()
-        self.tmst_cur, self.x_cur, self.y_cur, self.angle_cur = self.pose[0]
-        self.resp_position_idx = self.position_in_radius([self.x_cur, self.y_cur],
-                                                         self.response_locs,
-                                                         self.curr_cond["radius"])
-
-        if self.resp_position_idx != -1:
-            self._resp_loc = self.response_locs[self.resp_position_idx]
-            # log position on only when it enters the location
-            # which us when the position_tmst equal 0
-            if self.position_tmst == 0:
-                self.position_tmst = time.time()
-                self.log_loc_activity(1)
-        # log position off only in case it was in a response location
-        # which is when the position_tmst!=0
-        elif self.position_tmst != 0:
-            self.position_tmst = 0
-            self.log_loc_activity(0)
-
-        if self.is_ready(duration):
-            return self._resp_loc
-        return self._resp_loc!=-1
-
-    def update_loc(self, update=False):
-        """update the response/reward positions"""
-        if self.response.type == "object":
-            # find real position of the objects
-            self.response_locs = self.screen_pos_to_real_pos(
-                self.get_resp_obj_pos(self.resp_objs), self.screen_width
-            )
-            self.rew_locs = self.screen_pos_to_real_pos(
-                self.get_resp_obj_pos(self.reward_objs), self.screen_width
-            )
-
-    def is_ready(self, ready_time):
-        # if response_ready<=0 means there is no need to wait in reponse loc
-        if ready_time <= 0:
-            return True
-        if self.position_tmst != 0:
-            if time.time() - self.position_tmst > ready_time / 1000:
-                # if response_ready has pass in the response position return True
-                return True
+        if self.response_loc is not None:
+            correct_loc = self.response_loc in self.reward_locs
+            # log the activity because before move to the next state
+            if correct_loc:
+                self.log_loc_activity(1, self.response_loc)
+            return correct_loc
         return False
 
     def reward(self, tmst=0):
@@ -296,20 +299,22 @@ class OpenField(Behavior, dj.Manual):
         diff_screen_pos = screen_pos[0, :] - screen_pos[1, :]
         dim_change = np.where(diff_screen_pos != 0)[0][0]
 
-        if diff_screen_pos[dim_change] < 0:
-            real_pos = (np.array(pos) + 0.5) * const_dim
-        else:
-            real_pos = (-np.array(pos) + 0.5) * const_dim
+        real_pos = (
+            (-1 if diff_screen_pos[dim_change] >= 0 else 1) * np.array(pos) + 0.5
+        ) * const_dim
 
-        locs = []
-        if isinstance(real_pos, float):
-            real_pos = [real_pos]
-        for rl_pos in real_pos:
-            if dim_change == 1:
-                coords = np.array([screen_pos[0, 0], rl_pos])
-            else:
-                coords = np.array([rl_pos, screen_pos[0, 1]])
-            locs.append(list(coords))
+        # Ensure real_pos is always a list
+        real_pos = [real_pos] if isinstance(real_pos, float) else real_pos
+
+        locs = [
+            (
+                list(np.array([screen_pos[0, 0], rl_pos]))
+                if dim_change == 1
+                else list(np.array([rl_pos, screen_pos[0, 1]]))
+            )
+            for rl_pos in real_pos
+        ]
+
         return locs
 
     def exit(self):

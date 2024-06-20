@@ -12,7 +12,7 @@ class Condition(dj.Manual):
         # Approach experiment conditions
         -> Condition
         ---
-        trial_selection='staircase' : enum('fixed','random','staircase','biased') 
+        trial_selection='staircase' : enum('fixed','random','staircase','biased')
         max_reward=3000             : smallint
         min_reward=500              : smallint
         bias_window=5               : smallint
@@ -24,7 +24,7 @@ class Condition(dj.Manual):
 
         init_ready                  : int
         trial_ready                 : int
-        difficulty                  : int   
+        difficulty                  : int
         trial_duration              : int
         intertrial_duration         : int
         reward_duration             : int
@@ -88,8 +88,11 @@ class PreTrial(Experiment):
         if self.is_stopped():
             return "Exit"
         elif self.beh.is_sleep_time():
-            return 'Offtime'
-        elif self.beh.is_ready_start():
+            return "Offtime"
+        elif self.beh.in_location(
+            (self.curr_cond["init_loc_x"], self.curr_cond["init_loc_y"]),
+            self.curr_cond["init_radius"],
+        ):
             return "Trial"
         else:
             return "PreTrial"
@@ -103,7 +106,9 @@ class Trial(Experiment):
     def run(self):
         self.stim.present()
         self.logger.ping()
-        self.response = self.beh.get_response(self.start_time)
+        # check if animal is in any response location
+        self.response = self.beh.in_response_loc(self.curr_cond["trial_ready"],
+                                                 self.curr_cond["radius"])
 
     def next(self):
         if self.response and self.beh.is_correct():
