@@ -1,5 +1,7 @@
 import multiprocessing as mp
 import os
+os.environ["DLClight"] = "True"
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "1"
 import shutil
 import sys
 import time
@@ -15,8 +17,7 @@ from utils.helper_functions import get_display_width_height, read_yalm
 
 np.set_printoptions(suppress=True)
 
-os.environ["DLClight"] = "True"
-os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
+
 
 
 class DLC:
