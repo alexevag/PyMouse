@@ -179,7 +179,7 @@ class Panda(Stimulus, dj.Manual):
         # Set Object tasks
         self.objects = dict()
         for idx, obj in enumerate(iterable(self.curr_cond['obj_id'])):
-            self.objects[idx] = Agent(self, self.get_cond('obj_', idx))
+            self.objects[obj] = Agent(self, self.get_cond('obj_', idx))
 
         if 'movie_name' in self.curr_cond:
             self.present_movie = True
@@ -206,7 +206,7 @@ class Panda(Stimulus, dj.Manual):
         self.log_start()
         if self.present_movie: self.mov_texture.play()
         for idx, obj in enumerate(iterable(self.curr_cond['obj_id'])):
-            self.objects[idx].run()
+            self.objects[obj].run()
         self.flip(2)
         self.start_recording()
 
@@ -214,6 +214,7 @@ class Panda(Stimulus, dj.Manual):
         self.flip()
         if 'obj_dur' in self.curr_cond and self.curr_cond['obj_dur'] < self.timer.elapsed_time():
             self.isrunning = False
+        # print(self.objects[3].pos)
 
     def flip(self, n=1):
         for i in range(0, n):
@@ -351,7 +352,7 @@ class Agent(Panda):
         self.model.setHpr(self.rot_fun(t), self.tilt_fun(t), self.yaw_fun(t))
         self.model.setPos(self.x_fun(t), self.z_loc, self.y_fun(t))
         self.model.setScale(self.scale_fun(t))
-
+        self.pos = self.model.getPos()
         return Task.cont
 
     def remove(self, task):
