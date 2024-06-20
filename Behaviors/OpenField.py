@@ -6,7 +6,7 @@ import datajoint as dj
 import numpy as np
 
 from core.Behavior import Behavior, behavior
-from Interfaces.camera import WebCam
+from Interfaces.Camera import WebCam
 from Interfaces.dlc import DLC
 from utils.helper_functions import get_display_width_height, shared_memory_array
 

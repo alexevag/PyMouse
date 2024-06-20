@@ -1,10 +1,12 @@
-from time import sleep
-import numpy as np
+import multiprocessing as mp
 from concurrent.futures import ThreadPoolExecutor
 from threading import Event
+from time import sleep
+
+import numpy as np
+
 from core.Interface import *
-from Interfaces.camera import PiCamera
-import multiprocessing as mp
+from Interfaces.Camera import PiCamera
 
 
 class RPPorts(Interface):
@@ -19,8 +21,8 @@ class RPPorts(Interface):
 
     def __init__(self, **kwargs):
         super(RPPorts, self).__init__(**kwargs)
-        from RPi import GPIO
         import pigpio
+        from RPi import GPIO
         self.GPIO = GPIO
         self.GPIO.setmode(self.GPIO.BCM)
         self.Pulser = pigpio.pi()
