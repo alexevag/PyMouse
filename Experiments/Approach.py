@@ -104,13 +104,11 @@ class Trial(Experiment):
         self.stim.present()
         self.logger.ping()
         self.response = self.beh.get_response(self.start_time)
-        if self.beh.is_ready(self.curr_cond["trial_ready"]):
-            self.resp_ready = True
 
     def next(self):
-        if self.beh.in_reward_loc() and self.resp_ready:  # correct response
+        if self.response and self.beh.is_correct():
             return "Reward"
-        elif self.beh.in_punish_loc() and self.resp_ready:  # incorrect response
+        elif self.response and not self.beh.is_correct():
             return "Punish"
         elif self.state_timer.elapsed_time() > self.stim.curr_cond["trial_duration"]:
             return "Abort"

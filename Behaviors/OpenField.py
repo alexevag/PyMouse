@@ -83,6 +83,18 @@ class OpenField(Behavior, dj.Manual):
         )
         self.shared_memory_shape = (1, 4)
 
+        self.response_locs = []
+        self.reward_locs = []
+        self.init_loc = []
+        self.position_tmst = 0
+        self.resp_position_idx = -1
+        self.affine_matrix = []
+        self.corners = []
+
+    def setup(self, exp):
+        """setup is running one time at each session"""
+        super(OpenField, self).setup(exp)
+        
         # get screen parameters
         screen_params = self.logger.get(
             table="SetupConfiguration.Screen",
@@ -95,18 +107,6 @@ class OpenField(Behavior, dj.Manual):
         self.screen_pos = np.array(
             [[self.screen_width, 0], [self.screen_width, self.screen_width]]
         )
-
-        self.response_locs = []
-        self.rew_locs = []
-        self.init_loc = []
-        self.position_tmst = 0
-        self.resp_position_idx = -1
-        self.affine_matrix = []
-        self.corners = []
-
-    def setup(self, exp):
-        """setup is running one time at each session"""
-        super(OpenField, self).setup(exp)
 
         # start camera recording process
         self.cam = WebCam(
@@ -140,8 +140,7 @@ class OpenField(Behavior, dj.Manual):
     def prepare(self, condition):
         """prepare runs one time at the start of each a trial"""
         self.logged_pos = False
-        self.in_location = False
-        self._resp_loc = None
+        self._resp_loc = -1
         self.in_position_flag = False
 
         super().prepare(condition)
@@ -150,42 +149,23 @@ class OpenField(Behavior, dj.Manual):
         self.response_locs = self.screen_pos_to_real_pos(
             self.curr_cond["response_loc_x"], const_dim=self.screen_width
         )
-        self.rew_locs = self.screen_pos_to_real_pos(
+        self.reward_locs = self.screen_pos_to_real_pos(
             self.curr_cond["reward_loc_x"], const_dim=self.screen_width
         )
-        self.init_loc = [self.curr_cond["init_loc_x"], self.curr_cond["init_loc_y"]]
+        self.init_loc = [[self.curr_cond["init_loc_x"], self.curr_cond["init_loc_y"]]]
 
         self.position_tmst = 0
         self.resp_position_idx = -1
 
     def is_ready_start(self):
-        _, x_cur, y_cur, _ = self.pose[0]
-        return self.position_in_radius(
-            [x_cur, y_cur], self.init_loc, self.curr_cond["init_radius"]
-        )
-
-    def in_response_loc(self):
-        """check if the animal position has been in a specific location"""
         self.tmst_cur, self.x_cur, self.y_cur, self.angle_cur = self.pose[0]
-        # print("self.tmst_cur ", self.tmst_cur)
-        # check if animal pos is in any response location
+        return self.position_in_radius([self.x_cur, self.y_cur],
+                                       self.init_loc,
+                                       self.curr_cond["init_radius"]) != -1
 
-        self.resp_position_idx = self.position_in_radius(
-            [self.x_cur, self.y_cur], self.response_locs, self.curr_cond["radius"]
-        )
-        if self.resp_position_idx != -1:
-            self._resp_loc = self.response_locs[self.resp_position_idx]
-            self.in_location = True
-            if not self.logged_pos:
-                self.logged_pos = True
-                self.log_loc_activity(1)
-
-        if self.in_location is True and self.resp_position_idx == -1:
-            self.logged_pos = False
-            self.in_location = False
-            self.log_loc_activity(0)
-
-        return self.resp_position_idx != -1
+    def in_location(self, loc, radius):
+        self.tmst_cur, self.x_cur, self.y_cur, self.angle_cur = self.pose[0]
+        return self.position_in_radius([self.x_cur, self.y_cur], loc,  radius) != -1
 
     def log_loc_activity(self, in_pos: int) -> None:
         """Log activity with the given in_pos value.
@@ -222,40 +202,54 @@ class OpenField(Behavior, dj.Manual):
         else:
             return -1  # Return -1 if no position is within the radius
 
-    def in_loc(self, is_reward):
-        # if "loc_type" in self.curr_cond and self.curr_cond["loc_type"] == "follow":
-        #     self.response_locs = self.obj_Pos(obj_id="all")
-        #     self.rew_loc = self.obj_Pos(obj_id=reward_obj)
+    def is_correct(self):
+        """Check if the response location is correct.
 
-        if self.in_response_loc():
-            # if position_tmst==0 it it the first tmst in position set position_tmst to current time
-            if self.position_tmst == 0:
-                self.position_tmst = time.time()
-            # find the response location
-            resp_loc = self.response_locs[self.resp_position_idx]
-            # if is_reward=True check if resp_loc in reward locations
-            # else if is_reward=False check if it belong to a response loc that is not reward
-            if (resp_loc in self.rew_locs) == is_reward:
+        Returns:
+            bool: True if the response location is in the reward locations, False otherwise.
+        """
+        if self._resp_loc!=-1:
+            self.log_loc_activity(1)
+            if self._resp_loc in self.reward_locs:
+                print("correct location ", self._resp_loc)
                 return True
-        elif self.position_tmst != 0:
-            # reset position_tmst=0 since is not in any response loc
-            self.position_tmst = 0
-
         return False
 
-    # def update_loc(self):
-    #     """update the response/reward positions"""
-    #     if self.response.type == "object":
-    #         # find real position of the objects
-    #         self.response_locs = self.screen_pos_to_real_pos(
-    #             self.get_resp_obj_pos(self.resp_objs), self.screen_width
-    #         )
-    #         self.rew_locs = self.screen_pos_to_real_pos(
-    #             self.get_resp_obj_pos(self.reward_objs), self.screen_width
-    #         )
+    def get_response(self, duration:int):
+        """check if the animal position has been in a specific location"""
+        # self.update_locations()
+        self.tmst_cur, self.x_cur, self.y_cur, self.angle_cur = self.pose[0]
+        self.resp_position_idx = self.position_in_radius([self.x_cur, self.y_cur],
+                                                         self.response_locs,
+                                                         self.curr_cond["radius"])
 
-    # def get_obj_pos(self, objs):
-    #     return [obj.get_x_Pos for obj in objs]
+        if self.resp_position_idx != -1:
+            self._resp_loc = self.response_locs[self.resp_position_idx]
+            # log position on only when it enters the location
+            # which us when the position_tmst equal 0
+            if self.position_tmst == 0:
+                self.position_tmst = time.time()
+                self.log_loc_activity(1)
+        # log position off only in case it was in a response location
+        # which is when the position_tmst!=0
+        elif self.position_tmst != 0:
+            self.position_tmst = 0
+            self.log_loc_activity(0)
+
+        if self.is_ready(duration):
+            return self._resp_loc
+        return self._resp_loc!=-1
+
+    def update_loc(self, update=False):
+        """update the response/reward positions"""
+        if self.response.type == "object":
+            # find real position of the objects
+            self.response_locs = self.screen_pos_to_real_pos(
+                self.get_resp_obj_pos(self.resp_objs), self.screen_width
+            )
+            self.rew_locs = self.screen_pos_to_real_pos(
+                self.get_resp_obj_pos(self.reward_objs), self.screen_width
+            )
 
     def is_ready(self, ready_time):
         # if response_ready<=0 means there is no need to wait in reponse loc
@@ -265,17 +259,7 @@ class OpenField(Behavior, dj.Manual):
             if time.time() - self.position_tmst > ready_time / 1000:
                 # if response_ready has pass in the response position return True
                 return True
-
         return False
-
-    def in_punish_loc(self):
-        # "check if the animal is in a punish location which is
-        # all response locations except the reward"
-        return self.in_loc(is_reward=False)
-
-    def in_reward_loc(self):
-        # "check if the animal is in a reward location"
-        return self.in_loc(is_reward=True)
 
     def reward(self, tmst=0):
         """give reward at latest licked port
