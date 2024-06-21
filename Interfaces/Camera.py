@@ -107,6 +107,7 @@ class Camera(ABC):
         self.post_process = mp.Event()
         self.post_process.clear()
         self.process_queue = mp.Queue()
+        self.process_queue.cancel_join_thread()
 
         self.stop = mp.Event()
         self.stop.clear()
@@ -369,7 +370,8 @@ class WebCam(Camera):
         self.dataset = None
         self.tmst_output = None
         self.logger_timer = logger_timer
-
+        self.resolution_x = resolution_x
+        self.resolution_y = resolution_y
         if not globals()["IMPORT_CV2"]:
             raise ImportError(
                 "The cv2 package could not be imported. "
@@ -378,14 +380,6 @@ class WebCam(Camera):
                 'sudo pip3 install opencv-python"'
             )
 
-        self.camera = cv2.VideoCapture(0, cv2.CAP_V4L2)
-        if not self.camera.isOpened():
-            raise RuntimeError(
-                "No camera is available. Please check if the camera is connected and functional."
-            )
-
-        # self.camera.set(cv2.CAP_PROP_FPS, self.fps)
-        self.set_resolution(resolution_x, resolution_y)
 
         super().__init__(kwargs["filename"], kwargs["logger"], kwargs["video_aim"])
 
@@ -475,6 +469,17 @@ class WebCam(Camera):
             raise RuntimeError("Camera is not opened. Cannot proceed.")
         return True
 
+    def recording_init(self):
+        self.camera = cv2.VideoCapture(0, cv2.CAP_V4L2)
+        if not self.camera.isOpened():
+            raise RuntimeError(
+                "No camera is available. Please check if the camera is connected and functional."
+            )
+        print("camera is setup   " *10)
+        self.camera.set(cv2.CAP_PROP_FPS, self.fps)
+        self.set_resolution(self.resolution_x, self.resolution_y)
+
+
     def rec(self):
         """
         Continuously capture video frames, update timestamp, and enqueue frames for processing.
@@ -486,6 +491,7 @@ class WebCam(Camera):
         doesn't exceed its maximum size. We need for the process_queue(size:2) the latest image
         so if it is full get a frame and put the latest one.
         """
+        self.recording_init()
         self.recording.set()
         # first_tmst = self.logger_timer.elapsed_time()
         # cam_tmst_first = self.camera.get(cv2.CAP_PROP_POS_MSEC)
