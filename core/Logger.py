@@ -1,4 +1,3 @@
-import json
 import os
 import pathlib
 import platform
@@ -10,7 +9,7 @@ from dataclasses import dataclass
 from dataclasses import field as datafield
 from datetime import datetime
 from queue import PriorityQueue
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Optional
 
 import datajoint as dj
 import numpy
@@ -71,7 +70,6 @@ class Logger:
             print('setting local storage directory: ', self.source_path)
         else:
             self.source_path = dj.config['source_path']
-
         if 'target_path' in dj.config and os.path.isdir(dj.config['target_path']):
             self.target_path = dj.config['target_path']
         else:

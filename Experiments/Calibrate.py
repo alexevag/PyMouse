@@ -2,15 +2,16 @@ import time
 from importlib import import_module
 
 import pygame
-from Interfaces.RPPorts import *
-import time
+
+from core.Experiment import *
 
 try:
     import pygame_menu
     IMPORT_PYGAME_MENU = True
 except:
     IMPORT_PYGAME_MENU = False
-    
+
+
 class Experiment:
     """ _summary_
     I created a main menu where every time i want to move to new one a clean it 
