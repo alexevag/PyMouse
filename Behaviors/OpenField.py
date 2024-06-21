@@ -72,8 +72,8 @@ class OpenField(Behavior, dj.Manual):
         self.dlc_queue.cancel_join_thread()
 
         # create a mp Queue for the communication of dlc and camera
-        self.process_q = mp.Queue(maxsize=2)
-        self.process_q.cancel_join_thread()
+        # self.process_q = mp.Queue(maxsize=2)
+        # self.process_q.cancel_join_thread()
 
         # return only x,t,tmst and angle
         self.pose, self.sm = shared_memory_array(
@@ -82,6 +82,19 @@ class OpenField(Behavior, dj.Manual):
             columns_len=4,
         )
         self.shared_memory_shape = (1, 4)
+
+
+
+        self.response_locs = []
+        self.reward_locs = []
+        self.position_tmst = 0
+        self.affine_matrix = []
+        self.corners = []
+        self.response_loc = ()
+
+    def setup(self, exp):
+        """setup is running one time at each session"""
+        super(OpenField, self).setup(exp)
 
         # get screen parameters
         screen_params = self.logger.get(
@@ -96,27 +109,16 @@ class OpenField(Behavior, dj.Manual):
             [[self.screen_width, 0], [self.screen_width, self.screen_width]]
         )
 
-        self.response_locs = []
-        self.reward_locs = []
-        self.position_tmst = 0
-        self.affine_matrix = []
-        self.corners = []
-        self.response_loc = ()
-
-    def setup(self, exp):
-        """setup is running one time at each session"""
-        super(OpenField, self).setup(exp)
-
-        # start camera recording process
-        self.cam = WebCam(
-            self.exp,
-            logger=self.logger,
-            process_queue=self.process_q,
-        )
+        # # start camera recording process
+        # self.cam = WebCam(
+        #     self.exp,
+        #     logger=self.logger,
+        #     process_queue=self.process_q,
+        # )
 
         # start DLC process
         self.dlc = DLC(
-            self.process_q,
+            self.interface.camera.process_queue,
             self.dlc_queue,
             model_path=self.exp.params["model_path"],
             shared_memory_shape=self.shared_memory_shape,
@@ -179,7 +181,9 @@ class OpenField(Behavior, dj.Manual):
     def position_in_radius(self, target_position, positions: List, radius):
         target_position = np.array(target_position)
         positions_array = np.array(positions)
-
+        if positions_array.ndim==1: positions_array = positions_array.reshape(-1,1)
+        # print(positions_array)
+        # print("target_position" ,target_position)
         distances = np.linalg.norm(positions_array - target_position, axis=1)
         indices_within_radius = np.where(distances <= radius)[0]
 
@@ -327,7 +331,7 @@ class OpenField(Behavior, dj.Manual):
         self.interface.cleanup()
         # clear mp Queue
         self.dlc_queue.close()
-        self.process_q.close()
+        # self.process_q.close()
         # release shared memory
         # self.sm.close()
         # self.sm.unlink()
