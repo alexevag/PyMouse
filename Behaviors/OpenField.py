@@ -6,7 +6,6 @@ import datajoint as dj
 import numpy as np
 
 from core.Behavior import Behavior, behavior
-from Interfaces.Camera import WebCam
 from Interfaces.dlc import DLC
 from utils.helper_functions import get_display_width_height, shared_memory_array
 
@@ -71,10 +70,6 @@ class OpenField(Behavior, dj.Manual):
         self.dlc_queue = mp.Queue(maxsize=1)
         self.dlc_queue.cancel_join_thread()
 
-        # create a mp Queue for the communication of dlc and camera
-        # self.process_q = mp.Queue(maxsize=2)
-        # self.process_q.cancel_join_thread()
-
         # return only x,t,tmst and angle
         self.pose, self.sm = shared_memory_array(
             name="pose",
@@ -83,14 +78,20 @@ class OpenField(Behavior, dj.Manual):
         )
         self.shared_memory_shape = (1, 4)
 
-
-
         self.response_locs = []
         self.reward_locs = []
         self.position_tmst = 0
         self.affine_matrix = []
         self.corners = []
         self.response_loc = ()
+        self.screen_width = None
+        self.screen_pos = None
+        self.dlc = None
+
+        self.tmst_cur = None
+        self.x_cur = None
+        self.y_cur = None
+        self.angle_cur = None
 
     def setup(self, exp):
         """setup is running one time at each session"""
@@ -109,22 +110,18 @@ class OpenField(Behavior, dj.Manual):
             [[self.screen_width, 0], [self.screen_width, self.screen_width]]
         )
 
-        # # start camera recording process
-        # self.cam = WebCam(
-        #     self.exp,
-        #     logger=self.logger,
-        #     process_queue=self.process_q,
-        # )
-
-        # start DLC process
-        self.dlc = DLC(
-            self.interface.camera.process_queue,
-            self.dlc_queue,
-            model_path=self.exp.params["model_path"],
-            shared_memory_shape=self.shared_memory_shape,
-            logger=self.logger,
-            arena_size=self.screen_width,
-        )
+        if self.interface.camera is not None:
+            # start DLC process
+            self.dlc = DLC(
+                self.interface.camera.process_queue,
+                self.dlc_queue,
+                model_path=self.exp.params["model_path"],
+                shared_memory_shape=self.shared_memory_shape,
+                logger=self.logger,
+                arena_size=self.screen_width,
+            )
+        else:
+            raise ValueError("Camera is not initialized")
 
         # save the corners/position
         self.affine_matrix, self.corners = self.dlc_queue.get()
@@ -153,6 +150,18 @@ class OpenField(Behavior, dj.Manual):
         )
 
     def in_location(self, locs, radius):
+        """
+        Check if the current position is within a specified radius of any given locations.
+
+        Args:
+            self: The instance of the class.
+            locs (list): A list of locations, where each location is represented as a list [x, y].
+            radius (float): The radius within which to check if the current position is included.
+
+        Returns:
+            bool: True if the current position is within the radius of any given locations,
+            False otherwise.
+        """
         self.tmst_cur, self.x_cur, self.y_cur, self.angle_cur = self.pose[0]
         return self.position_in_radius([self.x_cur, self.y_cur], locs, radius)
 
@@ -179,9 +188,21 @@ class OpenField(Behavior, dj.Manual):
         self.logger.log("Activity.Touch", key, schema="behavior")
 
     def position_in_radius(self, target_position, positions: List, radius):
+        """
+        Determines if a target position is within a specified radius of any positions in a list.
+
+        Args:
+            target_position (list or np.array): The target position as a list or numpy array [x, y].
+            positions (List): A list of positions, where each position is a list [x, y].
+            radius (float): The radius within which to check if the target position is included.
+
+        Returns:
+            The first position within the radius if any, otherwise None.
+        """
         target_position = np.array(target_position)
         positions_array = np.array(positions)
-        if positions_array.ndim==1: positions_array = positions_array.reshape(-1,1)
+        if positions_array.ndim == 1:
+            positions_array = positions_array.reshape(-1, 1)
         # print(positions_array)
         # print("target_position" ,target_position)
         distances = np.linalg.norm(positions_array - target_position, axis=1)
@@ -194,7 +215,24 @@ class OpenField(Behavior, dj.Manual):
         return None  # Return None if no position is within the radius
 
     def in_response_loc(self, duration: int, radius: float = 0.0):
-        """check if the animal position has been in a specific location"""
+        """
+        Checks if the animal's position has been in a specific location for a given duration and
+        within a specified radius.
+
+        This method updates the animal's response location based on the specified radius and logs
+        the activity when the animal enters or exits the response location. It also checks if a
+        specified duration has passed while the animal is in the response location.
+
+        Args:
+            duration (int): The duration in seconds to check if the animal has been in the response
+            location.
+            radius (float): The radius within which to check if the animal is in the response
+            location. Defaults to 0.0.
+
+        Returns:
+            The response location if the animal has been in it for the specified duration,
+            otherwise 0.
+        """
         # self.update_locations()
         self.response_loc = self.in_location(
             self.response_locs, radius
@@ -240,19 +278,32 @@ class OpenField(Behavior, dj.Manual):
     # def get_obj_pos(self, objs_ids):
     #     return [self.objects[obj].get_x_Pos for obj in objs_ids]
 
-    def is_ready(self, duration, since=False):
+    def is_ready(self, init_duration, since=False):
+        """
+        Determines if a certain duration has passed since the last recorded position timestamp.
+
+        Args:
+            self: The instance of the class.
+            init_duration (int): The duration to check against, in milliseconds.
+            since (bool, optional): If True, checks if the duration has passed since a specific
+            timestamp. If False, checks against the last recorded position timestamp. Defaults to
+            False.
+
+        Returns:
+            bool: True if the specified duration has passed, False otherwise.
+        """
         # if response_ready<=0 means there is no need to wait in reponse loc
-        if duration <= 0:
+        if init_duration <= 0:
             return True
         elif self.position_tmst == 0:
             return False
         elif since:
             return self.position_tmst > since and (time.time() - self.position_tmst) > (
-                duration / 1000
+                init_duration / 1000
             )
         else:
             # if response_ready has pass in the duration return True
-            return (time.time() - self.position_tmst) > (duration / 1000)
+            return (time.time() - self.position_tmst) > (init_duration / 1000)
 
     def is_correct(self):
         """Check if the response location is correct.
@@ -324,7 +375,7 @@ class OpenField(Behavior, dj.Manual):
     def exit(self):
         super().exit()
         print("cam stop")
-        self.cam.stop_rec()
+        self.interface.cam.stop_rec()
         print("dlc close")
         self.dlc.stop()
         print("interface cleanup")
