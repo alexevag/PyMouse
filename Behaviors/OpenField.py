@@ -80,6 +80,7 @@ class OpenField(Behavior, dj.Manual):
 
         self.response_locs = []
         self.reward_locs = []
+        self.init_loc = ()
         self.position_tmst = 0
         self.affine_matrix = []
         self.corners = []
@@ -149,21 +150,7 @@ class OpenField(Behavior, dj.Manual):
             self.curr_cond["reward_loc_x"], const_dim=self.screen_width
         )
 
-    def in_location(self, locs, radius):
-        """
-        Check if the current position is within a specified radius of any given locations.
-
-        Args:
-            self: The instance of the class.
-            locs (list): A list of locations, where each location is represented as a list [x, y].
-            radius (float): The radius within which to check if the current position is included.
-
-        Returns:
-            bool: True if the current position is within the radius of any given locations,
-            False otherwise.
-        """
-        self.tmst_cur, self.x_cur, self.y_cur, self.angle_cur = self.pose[0]
-        return self.position_in_radius([self.x_cur, self.y_cur], locs, radius)
+        self.init_loc = (self.curr_cond["init_loc_x"], self.curr_cond["init_loc_y"])
 
     def log_loc_activity(self, in_pos: int, response_loc) -> None:
         """Log activity with the given in_pos value.
@@ -203,8 +190,6 @@ class OpenField(Behavior, dj.Manual):
         positions_array = np.array(positions)
         if positions_array.ndim == 1:
             positions_array = positions_array.reshape(-1, 1)
-        # print(positions_array)
-        # print("target_position" ,target_position)
         distances = np.linalg.norm(positions_array - target_position, axis=1)
         indices_within_radius = np.where(distances <= radius)[0]
 
@@ -214,7 +199,7 @@ class OpenField(Behavior, dj.Manual):
 
         return None  # Return None if no position is within the radius
 
-    def in_response_loc(self, duration: int, radius: float = 0.0):
+    def in_location(self, locs, duration: int, radius: float = 0.0):
         """
         Checks if the animal's position has been in a specific location for a given duration and
         within a specified radius.
@@ -233,11 +218,10 @@ class OpenField(Behavior, dj.Manual):
             The response location if the animal has been in it for the specified duration,
             otherwise 0.
         """
+        self.tmst_cur, self.x_cur, self.y_cur, self.angle_cur = self.pose[0]
+        self.response_loc = self.position_in_radius([self.x_cur, self.y_cur], locs, radius)
         # self.update_locations()
-        self.response_loc = self.in_location(
-            self.response_locs, radius
-        )
-        # TODO if the reponse loc change it will take it as a new response 
+        # TODO if the reponse loc change it will take it as a new response
         # loc to reset the position_tmst
         if self.response_loc is not None:
             # log position on only when it enters the location

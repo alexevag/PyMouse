@@ -90,7 +90,8 @@ class PreTrial(Experiment):
         elif self.beh.is_sleep_time():
             return "Offtime"
         elif self.beh.in_location(
-            (self.curr_cond["init_loc_x"], self.curr_cond["init_loc_y"]),
+            self.beh.init_loc,
+            self.curr_cond["init_ready"],
             self.curr_cond["init_radius"],
         ):
             return "Trial"
@@ -107,8 +108,11 @@ class Trial(Experiment):
         self.stim.present()
         self.logger.ping()
         # check if animal is in any response location
-        self.response = self.beh.in_response_loc(self.curr_cond["trial_ready"],
-                                                 self.curr_cond["radius"])
+        self.response = self.beh.in_location(
+            self.beh.response_locs,
+            self.curr_cond["trial_ready"],
+            self.curr_cond["radius"],
+        )
 
     def next(self):
         if self.response and self.beh.is_correct():
@@ -204,6 +208,7 @@ class InterTrial(Experiment):
 
     def exit(self):
         self.stim.fill()
+
 
 # class Offtime(Experiment):
 #     def entry(self):
