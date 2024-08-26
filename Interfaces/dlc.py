@@ -1,8 +1,5 @@
 import multiprocessing as mp
 import os
-os.environ["DLClight"] = "True"
-os.environ["TF_CPP_MIN_LOG_LEVEL"] = "1"
-import shutil
 import sys
 import time
 from datetime import datetime
@@ -13,10 +10,11 @@ import numpy as np
 from cv2 import getPerspectiveTransform
 from dlclive import DLCLive, Processor
 
-from utils.helper_functions import get_display_width_height, read_yalm
+from utils.helper_functions import read_yalm
 
 np.set_printoptions(suppress=True)
-
+os.environ["DLClight"] = "True"
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "1"
 
 
 
@@ -85,7 +83,7 @@ class DLC:
         self.source_path = self.logger.video_source_path + folder
         self.target_path = self.logger.video_target_path + folder
         self.joints = read_yalm(
-            path= self.model_path,
+            path=self.model_path,
             filename="pose_cfg.yaml",
             variable="all_joints_names",
         )
@@ -154,14 +152,14 @@ class DLC:
                 dataset_name="dlc",
                 dataset_type=np.dtype(joints_types),
                 filename=self.filename_dlc,
-                log = False
+                log=False
             )
 
             self.pose_hdf5_infer = self.logger.createDataset(
                 dataset_name="dlc_infer",
                 dataset_type=np.dtype(joints_types),
                 filename=self.filename_dlc,
-                log = False
+                log=False
             )
 
             joints_types_processed = [
@@ -175,7 +173,7 @@ class DLC:
                 dataset_name="dlc_processed",
                 dataset_type=np.dtype(joints_types_processed),
                 filename=self.filename_dlc,
-                log = False
+                log=False
             )
 
         self.frame_process = frame_process
@@ -274,7 +272,7 @@ class DLC:
         tuple: The coordinates of the rotated point (A').
         """
         # Calculate the vector from the origin to the point
-        vector_OA = np.array(point) - np.array(origin)
+        vector_oa = np.array(point) - np.array(origin)
 
         # Calculate the components of the rotation matrix
         rotation_matrix = np.array(
@@ -285,7 +283,7 @@ class DLC:
         )
 
         # Apply rotation matrix to the vector
-        rotated_vector = np.dot(rotation_matrix, vector_OA)
+        rotated_vector = np.dot(rotation_matrix, vector_oa)
 
         # Calculate the new position of the rotated point
         return tuple(np.array(origin) + rotated_vector)
@@ -297,7 +295,8 @@ class DLC:
         Parameters:
         vertex1 (tuple): The coordinates of the first vertex.
         vertex2 (tuple): The coordinates of the second vertex.
-        scaling_factor (float): Scaling factor for determining the distance of the apex from the midpoint.
+        scaling_factor (float): Scaling factor for determining the distance of the apex from the
+        midpoint.
 
         Returns:
         tuple: The coordinates of the inferred apex.
