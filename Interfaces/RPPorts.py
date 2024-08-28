@@ -1,4 +1,3 @@
-import multiprocessing as mp
 from concurrent.futures import ThreadPoolExecutor
 from threading import Event
 from time import sleep
