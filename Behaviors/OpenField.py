@@ -78,8 +78,9 @@ class OpenField(Behavior, dj.Manual):
         )
 
         self.response_locs: List[Tuple[float, float]] = []
+        self._responded_loc: Tuple[float, float] = []
         self.reward_locs: List[Tuple[float, float]] = []
-        self.init_loc: Tuple[float, float] = ()
+        self.init_loc: List[Tuple[float, float]] = ()
         self.position_tmst = 0
         self.affine_matrix: np.ndarray = np.array([])
         self.corners: List[Tuple[float, float]] = []
@@ -95,13 +96,6 @@ class OpenField(Behavior, dj.Manual):
         self.x_cur: Optional[float] = None
         self.y_cur: Optional[float] = None
         self.angle_cur: Optional[float] = None
-
-    @property
-    def screen_width(self):
-        "Get the screen width."
-        if self._screen_width is None:
-            raise ValueError("Screen width is not set. Run setup() first.")
-        return self._screen_width
 
     def setup(self, exp):
         """Setup is running one time at each session"""
@@ -160,7 +154,7 @@ class OpenField(Behavior, dj.Manual):
             self.curr_cond["reward_loc_x"], const_dim=self.screen_width
         )
 
-        self.init_loc = (self.curr_cond["init_loc_x"], self.curr_cond["init_loc_y"])
+        self.init_loc = [(self.curr_cond["init_loc_x"], self.curr_cond["init_loc_y"]),]
 
     def log_loc_activity(self, in_pos: int, response_loc: Tuple[float, float]) -> None:
         """Log activity with the given in_pos value."""
@@ -198,7 +192,10 @@ class OpenField(Behavior, dj.Manual):
         )
 
     def in_location(
-        self, locs: List[Tuple[float, float]], duration: float, radius: float = 0.0
+        self, locs: List[Tuple[float, float]],
+        duration: float,
+        radius: float = 0.0,
+        log_act:bool = True,
     ) -> Union[Tuple[float, float], int]:
         """Check if the animal is in a location within a radius for a specified duration"""
 
@@ -210,10 +207,13 @@ class OpenField(Behavior, dj.Manual):
         if self.response_loc is not None:
             if self.position_tmst == 0:
                 self.position_tmst = time.time()
-                self.log_loc_activity(1, self.response_loc)
+                if log_act:
+                    self._responded_loc = self.response_loc
+                    self.log_loc_activity(1, self.response_loc)
         elif self.position_tmst != 0:
             self.position_tmst = 0
-            self.log_loc_activity(0, self.response_loc)
+            if log_act:
+                self.log_loc_activity(0, self._responded_loc)
 
         return self.response_loc if self.is_ready(duration) else 0
 
