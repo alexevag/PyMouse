@@ -280,20 +280,20 @@ class OpenField(Behavior, dj.Manual):
 
         return locs
 
-    def exit(self) -> None:
-        """Clean up resources and exit"""
-        super().exit()
-        print("Stopping camera recording")
+    def stop(self):
+        """Stop the camera recording"""
         self.interface.cam.stop_rec()
         self.dlc.stop()
-        print("Cleaning up interface")
-        self.interface.cleanup()
+        time.sleep(0.5)
+        self.logger.closeDatasets()
+        print("Datasets closed")
         # self.process_q.close()
         # release shared memory
         # self.sm.close()
         # self.sm.unlink()
         # join processes
-        time.sleep(0.5)
-        self.logger.closeDatasets()
-        print("Datasets closed")
-        time.sleep(1)
+
+    def exit(self) -> None:
+        """Clean up resources and exit"""
+        super().exit()
+        self.interface.cleanup()
