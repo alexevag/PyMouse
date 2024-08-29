@@ -67,8 +67,8 @@ class OpenField(Behavior, dj.Manual):
     def __init__(self):
 
         # create a queue that returns the arena corners
-        self.dlc_queue = mp.Queue(maxsize=1)
-        self.dlc_queue.cancel_join_thread()
+        manager = mp.Manager()
+        self.corners_dict = manager.dict()
 
         # Create shared memory array for pose
         self.pose, self.sm = shared_memory_array(
@@ -122,15 +122,18 @@ class OpenField(Behavior, dj.Manual):
 
         self.dlc = DLC(
             self.interface.camera.process_queue,
-            self.dlc_queue,
+            self.corners_dict,
             model_path=self.exp.params["model_path"],
             shared_memory_shape=self.SHARED_MEMORY_SHAPE,
             logger=self.logger,
             arena_size=self.screen_width,
         )
 
-        # save the corners position
-        self.affine_matrix, self.corners = self.dlc_queue.get()
+        # Wait until the dictionary is filled with the values
+        while 'affine_matrix' not in self.corners_dict or 'corners' not in self.corners_dict:
+            time.sleep(0.1)
+        self.affine_matrix = self.corners_dict['affine_matrix']
+        self.corners = self.corners_dict['corners']
         self.logger.put(
             table="Configuration.Arena",
             tuple={
@@ -282,11 +285,9 @@ class OpenField(Behavior, dj.Manual):
         super().exit()
         print("Stopping camera recording")
         self.interface.cam.stop_rec()
-        print("Closing DLC")
         self.dlc.stop()
         print("Cleaning up interface")
         self.interface.cleanup()
-        self.dlc_queue.close()
         # self.process_q.close()
         # release shared memory
         # self.sm.close()

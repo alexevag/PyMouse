@@ -53,7 +53,7 @@ class DLC:
     def __init__(
         self,
         frame_process,
-        dlc_queue,
+        corners_dict,
         model_path: str,
         shared_memory_shape,
         logger,
@@ -104,7 +104,7 @@ class DLC:
         )
 
         self.frame_process = frame_process
-        self.dlc_queue = dlc_queue
+        self.corners_dict = corners_dict
 
         self.dlc_proc = Processor()
         self.dlc_live = None
@@ -117,7 +117,7 @@ class DLC:
 
         self.dlc_live_process = mp.Process(
             target=self.setup,
-            args=(self.frame_process, self.dlc_queue),
+            args=(self.frame_process, self.corners_dict),
         )
         self.dlc_live_process.start()
 
@@ -133,13 +133,13 @@ class DLC:
                 sys.stdout.flush()
                 time.sleep(0.1)
 
-    def setup(self, frame_process, dlc_queue):
+    def setup(self, frame_process, corners_dict):
         """
         Perform DLC setup and initialization.
 
         Args:
             frame_process (mp.Queue): Queue for receiving video frames for processing.
-            dlc_queue (mp.Queue): Queue for sending calibration data.
+            corners_dict (Dict): Dict for sending calibration data.
         """
         if self.logger is not None:
             joints_types = [("tmst", np.double)]
@@ -180,7 +180,8 @@ class DLC:
         # find corners of the arena
         self.corners = self.find_corners()
         self.M, self.M_inv = self.perspective_transform(self.corners, self.arena_size)
-        dlc_queue.put((self.M, self.corners))
+        corners_dict['affine_matrix'] = self.M
+        corners_dict['corners'] = self.corners
         # initialize dlc models
         self.dlc_live = DLCLive(self.model_path, processor=self.dlc_proc)
         self.dlc_live.init_inference(self.frame_process.get()[1] / 255)
