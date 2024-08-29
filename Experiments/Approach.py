@@ -195,12 +195,12 @@ class InterTrial(Experiment):
         self.logger.ping()
 
     def next(self):
-        if self.is_stopped() or self.beh.is_sleep_time() or self.beh.is_hydrated():
+        if self.is_stopped():
             return "Exit"
-        # elif self.beh.is_sleep_time() and not self.beh.is_hydrated(self.params['min_reward']):
-        #     return 'Hydrate'
-        # elif self.beh.is_sleep_time() or self.beh.is_hydrated():
-        #     return 'Offtime'
+        elif self.beh.is_sleep_time() and not self.beh.is_hydrated(self.params['min_reward']):
+            return 'Hydrate'
+        elif self.beh.is_sleep_time() or self.beh.is_hydrated():
+            return 'Offtime'
         elif self.state_timer.elapsed_time() >= self.curr_cond["intertrial_duration"]:
             return "PreTrial"
         else:
@@ -210,35 +210,50 @@ class InterTrial(Experiment):
         self.stim.fill()
 
 
-# class Offtime(Experiment):
-#     def entry(self):
-#         super().entry()
-#         self.stim.fill([0, 0, 0])
-#         self.release()
+class Hydrate(Experiment):
+    def run(self):
+        if self.beh.get_response() and self.state_timer.elapsed_time() > self.params['hydrate_delay']*60*1000:
+            self.stim.ready_stim()
+            self.beh.reward()
+            time.sleep(1)
+        self.logger.ping()
 
-#     def run(self):
-#         if self.logger.setup_status not in ['sleeping', 'wakeup'] and self.beh.is_sleep_time():
-#             self.logger.update_setup_info({'status': 'sleeping'})
-#         self.logger.ping()
-#         time.sleep(1)
+    def next(self):
+        if self.is_stopped():  # if wake up then update session
+            return 'Exit'
+        elif self.beh.is_hydrated(self.params['min_reward']) or not self.beh.is_sleep_time():
+            return 'Offtime'
+        else:
+            return 'Hydrate'
 
-#     def next(self):
-#         if self.is_stopped():  # if wake up then update session
-#             return 'Exit'
-#         elif not self.beh.is_sleep_time():
-#             return 'PreTrial'
-#         else:
-#             return 'Offtime'
 
-#     def exit(self):
-#         if self.logger.setup_status in ['wakeup', 'sleeping']:
-#             self.logger.update_setup_info({'status': 'running'})
+class Offtime(Experiment):
+    def entry(self):
+        super().entry()
+        self.stim.fill([0, 0, 0])
+        self.interface.release()
+
+    def run(self):
+        if self.logger.setup_status != 'sleeping' and self.beh.is_sleep_time():
+            self.logger.update_setup_info({'status': 'sleeping'})
+        self.logger.ping()
+        time.sleep(1)
+
+    def next(self):
+        if self.is_stopped():  # if wake up then update session
+            return 'Exit'
+        elif self.logger.setup_status == 'sleeping' and not self.beh.is_sleep_time():
+            return 'Exit'
+        elif not self.beh.is_hydrated() and not self.beh.is_sleep_time():
+            return 'Exit'
+        else:
+            return 'Offtime'
+
+    def exit(self):
+        if self.logger.setup_status != 'sleeping':
+            self.logger.update_setup_info({'status': 'running'})
 
 
 class Exit(Experiment):
-    def entry(self):
-        self.release()
-        self.beh.exit()
-
     def run(self):
         self.stop()
