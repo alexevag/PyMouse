@@ -289,7 +289,7 @@ class Camera(ABC):
         self.stop.set()
         time.sleep(1)
         # TODO: use join and close (possible issue due to h5 files)
-        self.camera_process.join()
+        self.camera_process.terminate()
 
     @staticmethod
     def _check_json_config(key: str, conf) -> str:
@@ -518,21 +518,24 @@ class WebCam(Camera):
         self.camera.release()
         self.recording.clear()
 
-    # def stop_rec(self):
-    #     """
-    #     Stop video recording and release resources.
+    def stop_rec(self):
+        """
+        Stop video recording and release resources.
 
-    #     If video recording is in progress, the method releases the camera resources,
-    #     closes the video output stream, clears the recording flag, and performs cleanup
-    #     by removing local video files.
-    #     """
-    #     # TODO: check the stop_rec function and define a function release to be called by the process
-    #     # if self.recording.is_set():
-    #     # Release camera resources if recording is in progress
-    #     # self.camera.release()
+        If video recording is in progress, the method releases the camera resources,
+        closes the video output stream, clears the recording flag, and performs cleanup
+        by removing local video files.
+        """
+        # TODO: check the stop_rec function and define a function release to be called by the process
+        # if self.recording.is_set():
+        # Release camera resources if recording is in progress
+        # self.camera.release()
 
-    #     # Call the superclass method to perform additional cleanup
-    #     super().stop_rec()
+        # Call the superclass method to perform additional cleanup
+        super().stop_rec()
+
+        # Remove local video files
+        self.clear_local_videos()
 
 
 class PiCamera(Camera):
