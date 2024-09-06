@@ -87,7 +87,7 @@ class OpenField(Behavior, dj.Manual):
         self.response_loc: Optional[Tuple[float, float]] = None
 
         # To be set during setup
-        self._screen_width: Optional[float] = None
+        self.screen_width: Optional[float] = None
         self.screen_pos: Optional[np.ndarray] = None
         self.dlc: Optional[DLC] = None
 
@@ -198,7 +198,7 @@ class OpenField(Behavior, dj.Manual):
         self, locs: List[Tuple[float, float]],
         duration: float,
         radius: float = 0.0,
-        log_act:bool = True,
+        log_act: bool = True,
     ) -> Union[Tuple[float, float], int]:
         """Check if the animal is in a location within a radius for a specified duration"""
 
