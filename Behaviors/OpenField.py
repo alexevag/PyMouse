@@ -1,6 +1,6 @@
 import multiprocessing as mp
 import time
-from typing import List, Optional, Tuple, Union
+from typing import Dict, List, Optional, Tuple, Union
 
 import datajoint as dj
 import numpy as np
@@ -12,8 +12,12 @@ from utils.helper_functions import get_display_width_height, shared_memory_array
 
 @behavior.schema
 class OpenField(Behavior, dj.Manual):
+    """
+    This class handles the behavior variables for an open field experiment.
+    It manages response locations, reward conditions, and animal tracking.
+    """
     definition = """
-    # This class handles the behavior variables for RP
+    # This class handles the behavior variables for OpenField
     ->BehCondition
     ---
     model_path           : varchar(256)
@@ -32,7 +36,7 @@ class OpenField(Behavior, dj.Manual):
 
     class Init(dj.Part):
         definition = """
-        # Lick response condition
+        # Location to initialize the trial start
         -> OpenField
         init_loc_y            : float            # response y location
         init_loc_x            : float            # response x location
@@ -65,10 +69,10 @@ class OpenField(Behavior, dj.Manual):
     SHARED_MEMORY_SHAPE = (1, 4)
 
     def __init__(self):
-
+        """Initialize the OpenField behavior class."""
         # create a queue that returns the arena corners
         manager = mp.Manager()
-        self.corners_dict = manager.dict()
+        self.corners_dict: Dict = manager.dict()
 
         # Create shared memory array for pose
         self.pose, self.sm = shared_memory_array(
@@ -97,8 +101,13 @@ class OpenField(Behavior, dj.Manual):
         self.y_cur: Optional[float] = None
         self.angle_cur: Optional[float] = None
 
-    def setup(self, exp):
-        """Setup is running one time at each session"""
+    def setup(self, exp) -> None:
+        """
+        Set up the experiment parameters and initialize DLC.
+
+        Args:
+            exp: The experiment object containing parameters.
+        """        
         super().setup(exp)
 
         # get screen parameters
@@ -116,7 +125,8 @@ class OpenField(Behavior, dj.Manual):
 
         self._initialize_dlc()
 
-    def _initialize_dlc(self):
+    def _initialize_dlc(self) -> None:
+        """Initialize the DeepLabCut (DLC) object for pose estimation."""
         if self.interface.camera is None:
             raise ValueError("Camera is not initialized")
 
@@ -144,8 +154,13 @@ class OpenField(Behavior, dj.Manual):
             schema="behavior",
         )
 
-    def prepare(self, condition):
-        """Prepare runs one time at the start of each trial"""
+    def prepare(self, condition: Dict) -> None:
+        """
+        Prepare the trial with the given condition.
+
+        Args:
+            condition: A dictionary containing trial conditions.
+        """
         super().prepare(condition)
         self.position_tmst = 0
 
@@ -160,7 +175,13 @@ class OpenField(Behavior, dj.Manual):
         self.init_loc = [(self.curr_cond["init_loc_x"], self.curr_cond["init_loc_y"]),]
 
     def log_loc_activity(self, in_pos: int, response_loc: Tuple[float, float]) -> None:
-        """Log activity with the given in_pos value."""
+        """
+        Log the animal's location activity.
+
+        Args:
+            in_pos: Integer indicating whether the animal is in position (1) or not (0).
+            response_loc: Tuple of (x, y) coordinates of the response location.
+        """
         act = {
             "animal_loc_x": self.x_cur,
             "animal_loc_y": self.y_cur,
@@ -180,7 +201,15 @@ class OpenField(Behavior, dj.Manual):
         radius: float,
     ) -> Optional[Tuple[float, float]]:
         """
-        Determines if a target position is within a specified radius of any positions in a list.
+        Determine if a target position is within a specified radius of any positions in a list.
+
+        Args:
+            target_position: Tuple of (x, y) coordinates of the target position.
+            positions: List of tuples of (x, y) coordinates to check against.
+            radius: The radius within which to check for proximity.
+
+        Returns:
+            The position within the radius if found, None otherwise.
         """
         positions_array = np.array(positions)
         if positions_array.ndim == 1:
@@ -200,8 +229,18 @@ class OpenField(Behavior, dj.Manual):
         radius: float = 0.0,
         log_act: bool = True,
     ) -> Union[Tuple[float, float], int]:
-        """Check if the animal is in a location within a radius for a specified duration"""
+        """
+        Check if the animal is in a location within a radius for a specified duration.
 
+        Args:
+            locs: List of tuples of (x, y) coordinates to check.
+            duration: The duration the animal needs to stay in the location.
+            radius: The radius around the location to consider.
+            log_act: Whether to log the activity.
+
+        Returns:
+            The response location if the animal is in position, 0 otherwise.
+        """
         self.tmst_cur, self.x_cur, self.y_cur, self.angle_cur = self.pose[0]
         self.response_loc = self.position_in_radius(
             (self.x_cur, self.y_cur), locs, radius
@@ -221,7 +260,16 @@ class OpenField(Behavior, dj.Manual):
         return self.response_loc if self.is_ready(duration) else 0
 
     def is_ready(self, init_duration: float, since: float = False) -> bool:
-        """Check if the specified duration has passed since entering a location"""
+        """
+        Check if the specified duration has passed since entering a location.
+
+        Args:
+            init_duration: The duration to check against (in milliseconds).
+            since: If True, check if the position timestamp is after the 'since' time.
+
+        Returns:
+            True if the duration has passed, False otherwise.
+        """
         if init_duration <= 0:
             return True
         if self.position_tmst == 0:
@@ -232,7 +280,12 @@ class OpenField(Behavior, dj.Manual):
         return elapsed > (init_duration / 1000)
 
     def is_correct(self) -> bool:
-        """Check if the animal's response location is correct"""
+        """
+        Check if the animal's response location is correct.
+
+        Returns:
+            True if the response location is correct, False otherwise.
+        """
         if self.response_loc is not None:
             correct_loc = self.response_loc in self.reward_locs
             if correct_loc:
@@ -241,7 +294,15 @@ class OpenField(Behavior, dj.Manual):
         return False
 
     def reward(self, tmst: float = 0) -> bool:
-        """Give reward at latest licked port"""
+        """
+        Give reward at the latest licked port.
+
+        Args:
+            tmst: The timestamp to check licking since.
+
+        Returns:
+            True if reward was given, False otherwise.
+        """
         licked_port = self.is_licking(since=tmst, reward=True)
         if licked_port:
             self.interface.give_liquid(licked_port)
@@ -251,12 +312,22 @@ class OpenField(Behavior, dj.Manual):
         return False
 
     def punish(self) -> None:
+        """Update history with a punishment."""
         self.update_history(self.response.port, punish=True)
 
     def screen_pos_to_real_pos(
         self, pos: Union[float, List[float]], const_dim: float
     ) -> List[Tuple[float, float]]:
-        """Convert obj_pos in real coordinates"""
+        """
+        Convert screen positions to real coordinates.
+
+        Args:
+            pos: The position(s) to convert.
+            const_dim: The constant dimension (screen width).
+
+        Returns:
+            A list of tuples representing the real positions.
+        """
         screen_pos = self.screen_pos
         # in a square positions of the screen only one dimension is change
         diff_screen_pos = screen_pos[0, :] - screen_pos[1, :]
@@ -281,7 +352,7 @@ class OpenField(Behavior, dj.Manual):
         return locs
 
     def stop(self):
-        """Stop the camera recording"""
+        """Stop the camera recording and clean up resources."""
         self.interface.cam.stop_rec()
         self.dlc.stop()
         time.sleep(0.5)
