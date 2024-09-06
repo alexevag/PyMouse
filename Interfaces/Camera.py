@@ -226,7 +226,7 @@ class Camera(ABC):
         file, target = args
         try:
             shutil.copy(str(file), str(target / file.name))
-            print(f"Transferred file: {file.name}")
+            print(f"Transferred file: {str(target / file.name)}")
         except FileNotFoundError as ex:
             print(f"Failed to transfer file: {file.name}. Reason: {ex}")
 
@@ -277,6 +277,7 @@ class Camera(ABC):
             frame_queue (Queue): The frame queue to dequeue frames from.
         """
         while not self.stop.is_set() or not frame_queue.empty():
+            if self.stop.is_set(): print(frame_queue.qsize())
             if not frame_queue.empty():
                 self.write_frame(frame_queue.get())
             else:
@@ -289,7 +290,18 @@ class Camera(ABC):
         self.stop.set()
         time.sleep(1)
         # TODO: use join and close (possible issue due to h5 files)
-        self.camera_process.terminate()
+        while self.process_queue.qsize()>0:
+            print(self.process_queue.qsize())
+        self.process_queue.close()
+        self.camera_process.join(timeout=5)
+        # check if the process is still alive
+        if self.camera_process.is_alive():
+            print("self.process_queue is terminated")
+            self.camera_process.terminate()
+        else:
+            print("self.process_queue is closed")
+            self.camera_process.close()
+        
 
     @staticmethod
     def _check_json_config(key: str, conf) -> str:

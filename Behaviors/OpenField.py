@@ -370,17 +370,15 @@ class OpenField(Behavior, dj.Manual):
     def stop(self):
         """Stop the camera recording"""
         # self.interface.camera.release()
-        self.stop_done =True 
+        self.stop_done =True
+        self.interface.release()
         print("dlc close")
         self.dlc.stop()
-        time.sleep(0.5)
         print("interface cleanup")
         self.interface.cleanup()
         print("self.process_q.close()")
-        self.interface.camera.process_queue.close()
-        print("Datasets closed")
-        self.logger.closeDatasets()
-        print("Datasets closed")
+        # self.logger.closeDatasets()
+        # print("Datasets closed")
         # self.process_q.close()
         # release shared memory
         # self.sm.close()

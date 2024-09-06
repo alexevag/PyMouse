@@ -80,7 +80,7 @@ class DLC:
         self.close = mp.Event()
         self.close.clear()
         self.logger = logger
-        folder = (f"Recordings/{self.logger.trial_key['animal_id']}"
+        folder = (f"{self.logger.trial_key['animal_id']}"
                   f"_{self.logger.trial_key['session']}/")
         self.source_path = self.logger.video_source_path + folder
         self.target_path = self.logger.video_target_path + folder
@@ -440,6 +440,7 @@ class DLC:
                 prev_pose = curr_pose
             else:
                 time.sleep(0.001)
+        self.logger.closeDatasets()
 
     def get_position(self, pose, tmst):
         """Example coordinates for triangle vertices and square vertices
@@ -474,5 +475,5 @@ class DLC:
         self.close.set()
         self.sm.close()
         self.sm.unlink()
-        self.logger.closeDatasets()
-        self.dlc_live_process.terminate()
+        self.dlc_live_process.join()
+        self.dlc_live_process.close()
