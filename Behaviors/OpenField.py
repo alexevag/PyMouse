@@ -71,8 +71,10 @@ class OpenField(Behavior, dj.Manual):
     def __init__(self):
         """Initialize the OpenField behavior class."""
         # create a queue that returns the arena corners
-        manager = mp.Manager()
-        self.corners_dict: Dict = manager.dict()
+        self.manager = mp.Manager()
+        self.corners_dict: Dict = self.manager.dict()
+        # Create an event for DLC initialization
+        self.dlc_init_event = self.manager.Event()
 
         # Create shared memory array for pose
         self.pose, self.sm = shared_memory_array(
@@ -100,6 +102,7 @@ class OpenField(Behavior, dj.Manual):
         self.x_cur: Optional[float] = None
         self.y_cur: Optional[float] = None
         self.angle_cur: Optional[float] = None
+        self.stop_done = False
 
     def setup(self, exp) -> None:
         """
@@ -109,6 +112,7 @@ class OpenField(Behavior, dj.Manual):
             exp: The experiment object containing parameters.
         """        
         super().setup(exp)
+        self.stop_done = False
 
         # get screen parameters
         screen_params = self.logger.get(
@@ -125,25 +129,37 @@ class OpenField(Behavior, dj.Manual):
 
         self._initialize_dlc()
 
+    def _init_callback(self, corners_dict: Dict) -> None:
+        """
+        Callback function for DLC initialization.
+
+        Args:
+            corners_dict: a dictionary with affine matrix and the position of corners
+        """
+        self.corners_dict = corners_dict
+        self.dlc_init_event.set()
+
     def _initialize_dlc(self) -> None:
         """Initialize the DeepLabCut (DLC) object for pose estimation."""
         if self.interface.camera is None:
             raise ValueError("Camera is not initialized")
 
-        self.dlc = DLC(
-            self.interface.camera.process_queue,
-            self.corners_dict,
-            model_path=self.exp.params["model_path"],
-            shared_memory_shape=self.SHARED_MEMORY_SHAPE,
-            logger=self.logger,
-            arena_size=self.screen_width,
-        )
+        self.dlc = DLC(self.interface.camera.process_queue,
+                       self.corners_dict,
+                       model_path=self.exp.params["model_path"],
+                       shared_memory_shape=self.SHARED_MEMORY_SHAPE,
+                       logger=self.logger,
+                       arena_size=self.screen_width,
+                       callback=self._init_callback)
 
-        # Wait until the dictionary is filled with the values
-        while 'affine_matrix' not in self.corners_dict or 'corners' not in self.corners_dict:
-            time.sleep(0.1)
+        # Wait for DLC initialization to complete
+        if not self.dlc_init_event.wait(timeout=30):
+            raise TimeoutError("DLC initialization timed out")
         self.affine_matrix = self.corners_dict['affine_matrix']
         self.corners = self.corners_dict['corners']
+
+        print("#"*20)
+        print("self.corners_dict: ", self.corners_dict)
         self.logger.put(
             table="Configuration.Arena",
             tuple={
@@ -353,8 +369,8 @@ class OpenField(Behavior, dj.Manual):
 
     def stop(self):
         """Stop the camera recording"""
-       
         # self.interface.camera.release()
+        self.stop_done =True 
         print("dlc close")
         self.dlc.stop()
         time.sleep(0.5)
@@ -374,4 +390,6 @@ class OpenField(Behavior, dj.Manual):
     def exit(self) -> None:
         """Clean up resources and exit"""
         super().exit()
+        if not self.stop_done:
+            self.stop()
         self.interface.cleanup()

@@ -4,6 +4,7 @@ import sys
 import time
 from datetime import datetime
 from multiprocessing.shared_memory import SharedMemory
+from typing import Any, Callable, Dict, Optional
 
 import cv2
 import numpy as np
@@ -15,7 +16,6 @@ from utils.helper_functions import read_yalm
 np.set_printoptions(suppress=True)
 os.environ["DLClight"] = "True"
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "1"
-
 
 
 class DLC:
@@ -52,12 +52,13 @@ class DLC:
 
     def __init__(
         self,
-        frame_process,
-        corners_dict,
+        frame_process: mp.Queue,
+        corners_dict: Dict[str, Any],
         model_path: str,
-        shared_memory_shape,
-        logger,
-        arena_size,
+        shared_memory_shape: tuple,
+        logger: Any,
+        arena_size: float,
+        callback: Optional[Callable[[np.ndarray, list], None]] = None
     ):
         self.model_path = model_path
         self.nose_y = 0
@@ -65,6 +66,7 @@ class DLC:
         self.timestamp = 0
         self.rot_angle = self.calculate_rotation_angle(side=1, base=0.8)
         self.arena_size = arena_size
+        self.callback = callback
 
         # attach another shared memory block
         self.sm = SharedMemory("pose")
@@ -105,6 +107,9 @@ class DLC:
 
         self.frame_process = frame_process
         self.corners_dict = corners_dict
+        self.corners = None
+        self.affine_matrix = None
+        self.affine_matrix_inv = None
 
         self.dlc_proc = Processor()
         self.dlc_live = None
@@ -123,7 +128,6 @@ class DLC:
 
         # wait until the dlc setup hass finished initialization before start the experiment
         start_time = time.time()
-
         while not self.setup_ready.is_set():
             elapsed_time = time.time() - start_time
             for char in '|/-\\':
@@ -179,12 +183,16 @@ class DLC:
         self.frame_process = frame_process
         # find corners of the arena
         self.corners = self.find_corners()
-        self.M, self.M_inv = self.perspective_transform(self.corners, self.arena_size)
-        corners_dict['affine_matrix'] = self.M
-        corners_dict['corners'] = self.corners
+        self.affine_matrix, self.affine_matrix_inv = self.perspective_transform(
+            self.corners, self.arena_size)
+        self.corners_dict["affine_matrix"] = self.affine_matrix
+        self.corners_dict["corners"] = self.corners
         # initialize dlc models
         self.dlc_live = DLCLive(self.model_path, processor=self.dlc_proc)
         self.dlc_live.init_inference(self.frame_process.get()[1] / 255)
+
+        if self.callback:
+            self.callback(self.corners_dict)
 
         # flag to indicate that all the dlc inits has finished before start experiment
         self.setup_ready.set()
@@ -220,10 +228,9 @@ class DLC:
         while len(corners) < 4:
             _, _frame = self.frame_process.get()
             pose = dlc_live.get_pose(_frame / 255)
-            sys.stdout.write(
-                "\rWait for high confidence corners" + "." * (int(time.time()) % 4)
-            )
-            sys.stdout.flush()
+            print("\rWait for high confidence corners" + "." * (int(time.time()) % 4),
+                  end="",
+                  flush=True)
             if np.all(pose[:, 2] > 0.85):
                 corners.append(dlc_live.get_pose(_frame / 255))
         corners = np.mean(np.array(corners), axis=0)
@@ -345,7 +352,7 @@ class DLC:
 
         return angle_rad
 
-    def update_position(self, pose, prev_pose,  threshold=0.85):
+    def update_position(self, pose, prev_pose,  threshold=0.1):
         """
         Update the position based on the confidence of detected body parts.
 
@@ -379,7 +386,7 @@ class DLC:
 
         return pose
 
-    def init_curr_pos(self, threshold=0.95):
+    def init_curr_pos(self, threshold=0.01):
         """
         Wait for the first pose with three high-confidence points in the head of the animal.
 
@@ -392,11 +399,8 @@ class DLC:
                 _, self.frame = self.frame_process.get()
                 p = self.dlc_live.get_pose(self.frame / 255)
                 scores = np.array(p[0:3][:, 2])
-                sys.stdout.write(
-                    "\rWait for high confidence pose" + "." * (int(time.time()) % 4)
-                )
-                sys.stdout.flush()
-                print("scores  ", scores)
+                print("\rWait for high confidence pose" + "." * (int(time.time()) % 4), end="")
+                print(" scores ", scores, end="")
                 if len(np.where(scores >= threshold)[0]) == 3:
                     curr_pose = p
                     high_conf_points = True
@@ -444,26 +448,21 @@ class DLC:
         triangle_vertices = np.array(pose[0:3, 0:2])
 
         # Step 1: Find the centroid of the triangle
-        centroid_triangle = self.find_centroid(triangle_vertices)
+        centroid_triangle = np.mean(triangle_vertices, axis=0)
         # Step 2: Compute the vector from the centroid to nose of the triangle
-        vector_to_nose = self.compute_vector(triangle_vertices[0, :], centroid_triangle)
+        vector_to_nose = triangle_vertices[0, :] - centroid_triangle
         # Step 3: Compute the angle (phase) between the vectors
         angle = self.compute_angle(
             vector_to_nose, np.array([1, 0])
         )  # Assuming reference vector is [1, 0]
 
         point = np.array([[centroid_triangle[0], centroid_triangle[1]]], dtype=np.float32)
-        centroid_triangle = cv2.perspectiveTransform(np.array([point]),self.M).ravel()
+        centroid_triangle = cv2.perspectiveTransform(np.array([point]), self.affine_matrix).ravel()
 
         return tmst, centroid_triangle[0], centroid_triangle[1], angle
 
-    def find_centroid(self, vertices):
-        return np.mean(vertices, axis=0)
-
-    def compute_vector(self, point1, centroid):
-        return point1 - centroid
-
     def compute_angle(self, v1, v2):
+        """Compute the angle between two vectors in degrees."""
         dot_product = np.dot(v1, v2)
         cross_product = np.cross(v1, v2)
         angle = np.arctan2(cross_product, dot_product)
