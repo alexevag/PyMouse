@@ -40,6 +40,7 @@ class Experiment(State, ExperimentClass):
         "trial_selection": "staircase",
         "max_reward": 1500,
         "min_reward": 500,
+        'hydrate_delay': 0,
         "bias_window": 5,
         "staircase_window": 20,
         "stair_up": 0.7,
@@ -232,6 +233,7 @@ class Offtime(Experiment):
         super().entry()
         self.stim.fill([0, 0, 0])
         self.interface.release()
+        self.beh.stop()
 
     def run(self):
         if self.logger.setup_status != 'sleeping' and self.beh.is_sleep_time():
@@ -242,6 +244,8 @@ class Offtime(Experiment):
     def next(self):
         if self.is_stopped():  # if wake up then update session
             return 'Exit'
+        elif self.logger.setup_status == 'wakeup' and not self.beh.is_sleep_time():
+            return 'PreTrial'
         elif self.logger.setup_status == 'sleeping' and not self.beh.is_sleep_time():
             return 'Exit'
         elif not self.beh.is_hydrated() and not self.beh.is_sleep_time():
@@ -250,7 +254,7 @@ class Offtime(Experiment):
             return 'Offtime'
 
     def exit(self):
-        if self.logger.setup_status != 'sleeping':
+        if self.logger.setup_status in ['wakeup', 'sleeping']:
             self.logger.update_setup_info({'status': 'running'})
 
 
