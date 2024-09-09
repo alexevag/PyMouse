@@ -92,7 +92,7 @@ class Camera(ABC):
             self._check_json_config("video_target_path", conf)
             + f"/Recordings/{self.filename}/"
         )
-        print(conf)
+
         try:
             self.serve_port = conf["server.port"]
         except KeyError:
@@ -277,7 +277,6 @@ class Camera(ABC):
             frame_queue (Queue): The frame queue to dequeue frames from.
         """
         while not self.stop.is_set() or not frame_queue.empty():
-            if self.stop.is_set(): print(frame_queue.qsize())
             if not frame_queue.empty():
                 self.write_frame(frame_queue.get())
             else:
@@ -290,8 +289,6 @@ class Camera(ABC):
         self.stop.set()
         time.sleep(1)
         # TODO: use join and close (possible issue due to h5 files)
-        while self.process_queue.qsize()>0:
-            print(self.process_queue.qsize())
         self.process_queue.close()
         self.camera_process.join(timeout=5)
         # check if the process is still alive
@@ -487,7 +484,6 @@ class WebCam(Camera):
             raise RuntimeError(
                 "No camera is available. Please check if the camera is connected and functional."
             )
-        print("camera is setup   " *10)
         self.camera.set(cv2.CAP_PROP_FPS, self.fps)
         self.set_resolution(self.resolution_x, self.resolution_y)
 
@@ -529,6 +525,7 @@ class WebCam(Camera):
 
         self.camera.release()
         self.recording.clear()
+        self.dataset.exit()
 
     def stop_rec(self):
         """
