@@ -84,8 +84,8 @@ class Interface:
 
     def release(self):
         if self.camera:
-            print("Release camear"*10)
-            if self.camera.recording.is_set(): self.camera.stop_rec()
+            if self.camera.recording.is_set():
+                self.camera.stop_rec()
 
     def load_calibration(self):
         for port in list(set(self.rew_ports)):
