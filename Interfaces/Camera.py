@@ -298,7 +298,6 @@ class Camera(ABC):
         else:
             print("self.process_queue is closed")
             self.camera_process.close()
-        
 
     @staticmethod
     def _check_json_config(key: str, conf) -> str:
@@ -388,7 +387,6 @@ class WebCam(Camera):
                 "You can install cv2 using pip:\n"
                 'sudo pip3 install opencv-python"'
             )
-
 
         super().__init__(kwargs["filename"], kwargs["logger"], kwargs["video_aim"])
 
@@ -486,7 +484,6 @@ class WebCam(Camera):
             )
         self.camera.set(cv2.CAP_PROP_FPS, self.fps)
         self.set_resolution(self.resolution_x, self.resolution_y)
-
 
     def rec(self):
         """

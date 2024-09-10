@@ -16,6 +16,7 @@ class OpenField(Behavior, dj.Manual):
     This class handles the behavior variables for an open field experiment.
     It manages response locations, reward conditions, and animal tracking.
     """
+
     definition = """
     # This class handles the behavior variables for OpenField
     ->BehCondition
@@ -110,7 +111,7 @@ class OpenField(Behavior, dj.Manual):
 
         Args:
             exp: The experiment object containing parameters.
-        """        
+        """
         super().setup(exp)
         self.stop_done = False
 
@@ -144,21 +145,23 @@ class OpenField(Behavior, dj.Manual):
         if self.interface.camera is None:
             raise ValueError("Camera is not initialized")
 
-        self.dlc = DLC(self.interface.camera.process_queue,
-                       self.corners_dict,
-                       model_path=self.exp.params["model_path"],
-                       shared_memory_shape=self.SHARED_MEMORY_SHAPE,
-                       logger=self.logger,
-                       arena_size=self.screen_width,
-                       callback=self._init_callback)
+        self.dlc = DLC(
+            self.interface.camera.process_queue,
+            self.corners_dict,
+            model_path=self.exp.params["model_path"],
+            shared_memory_shape=self.SHARED_MEMORY_SHAPE,
+            logger=self.logger,
+            arena_size=self.screen_width,
+            callback=self._init_callback,
+        )
 
         # Wait for DLC initialization to complete
         if not self.dlc_init_event.wait(timeout=30):
             raise TimeoutError("DLC initialization timed out")
-        self.affine_matrix = self.corners_dict['affine_matrix']
-        self.corners = self.corners_dict['corners']
+        self.affine_matrix = self.corners_dict["affine_matrix"]
+        self.corners = self.corners_dict["corners"]
 
-        print("#"*20)
+        print("#" * 20)
         print("self.corners_dict: ", self.corners_dict)
         self.logger.put(
             table="Configuration.Arena",
@@ -188,7 +191,9 @@ class OpenField(Behavior, dj.Manual):
             self.curr_cond["reward_loc_x"], const_dim=self.screen_width
         )
 
-        self.init_loc = [(self.curr_cond["init_loc_x"], self.curr_cond["init_loc_y"]),]
+        self.init_loc = [
+            (self.curr_cond["init_loc_x"], self.curr_cond["init_loc_y"]),
+        ]
 
     def log_loc_activity(self, in_pos: int, response_loc: Tuple[float, float]) -> None:
         """
@@ -240,7 +245,8 @@ class OpenField(Behavior, dj.Manual):
         )
 
     def in_location(
-        self, locs: List[Tuple[float, float]],
+        self,
+        locs: List[Tuple[float, float]],
         duration: float,
         radius: float = 0.0,
         log_act: bool = True,
@@ -370,7 +376,7 @@ class OpenField(Behavior, dj.Manual):
     def stop(self):
         """Stop the camera recording"""
         # self.interface.camera.release()
-        self.stop_done =True
+        self.stop_done = True
         self.interface.release()
         print("dlc close")
         self.dlc.stop()
