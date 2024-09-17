@@ -1,4 +1,5 @@
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import replace
 from threading import Event
 from time import sleep
 
@@ -31,7 +32,8 @@ class RPPorts(Interface):
         self.ts = False
         self.pulses = dict()
         self.sound_pulses=[]
-
+        self.last_prox = None
+    
         matched_ports = set(self.rew_ports) & set(self.channels['Liquid'].keys())
         assert matched_ports == set(self.rew_ports), 'All reward ports must have assigned a liquid delivery port!'
         if 'Lick' in self.channels:
@@ -230,17 +232,26 @@ class RPPorts(Interface):
             channel (int, optional): The channel number of the proximity sensor. Defaults to 0.
         """
         # Get the port number corresponding to the proximity sensor channel
-        port = self._channel2port(channel, 'Proximity')
+        port = replace(self._channel2port(channel, 'Proximity'))
         # Check if the animal is in position
         in_position = self._get_position(port.port)
+        if in_position == self.last_prox and self.last_prox is not None:
+            return
+        else:
+            self.last_prox = in_position
         # Start the timer if the animal is in position
         if in_position: self.timer_ready.start()
         # Log the in_position event and update the position if there is a change in position
         if in_position and not self.position.port:
-            self.position_tmst = self.beh.log_activity({**port.__dict__, 'in_position': 1})
-            self.position = port
+            self.position_tmst = self.logger.logger_timer.elapsed_time()
+            self.position = replace(port)
         elif not in_position and self.position.port:
-            tmst = self.beh.log_activity({**port.__dict__, 'in_position': 0})
+            tmst = self.logger.logger_timer.elapsed_time()
+            if tmst - self.position_tmst > 50:
+                in_position_dict = {**self.position.__dict__, 'time': self.position_tmst}
+                off_position_dict = {**port.__dict__, 'time': tmst}
+                self.beh.log_activity({**in_position_dict, 'in_position': 1})
+                self.beh.log_activity({**off_position_dict, 'in_position': 0})
             self.position_dur = tmst - self.position_tmst
             self.position = Port()
 
