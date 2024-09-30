@@ -198,7 +198,7 @@ class OpenField(Behavior, dj.Manual):
         }
         key = {**self.logger.trial_key, **act}
         self.logger.log("Activity", key, schema="behavior", priority=10)
-        self.logger.log("Activity.OpenField", key, schema="behavior")
+        self.logger.log("Activity.Openfield", key, schema="behavior")
 
     def position_in_radius(
         self,

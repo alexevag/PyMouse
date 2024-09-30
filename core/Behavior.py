@@ -133,7 +133,7 @@ class Activity(dj.Manual):
         time	     	    : int           	# time from session start (ms)
         """
 
-    class OpenField(dj.Part):
+    class Openfield(dj.Part):
         definition = """
         # animal OpenField activity
         -> Activity
@@ -141,7 +141,7 @@ class Activity(dj.Manual):
         animal_loc_y               : float
         resp_loc_x                 : float
         resp_loc_y                 : float
-        in_loc                     : tinyint
+        in_pos                     : tinyint
         time	     	           : int
         """
 
