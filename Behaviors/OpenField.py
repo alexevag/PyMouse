@@ -6,7 +6,7 @@ import datajoint as dj
 import numpy as np
 
 from core.Behavior import Behavior, behavior
-from Interfaces.dlc import DLC
+from Interfaces.dlc import DLCContinuousPoseEstimator, DLCCornerDetector
 from utils.helper_functions import get_display_width_height, shared_memory_array
 
 
@@ -83,6 +83,9 @@ class OpenField(Behavior, dj.Manual):
             rows_len=self.SHARED_MEMORY_SHAPE[0],
             columns_len=self.SHARED_MEMORY_SHAPE[1],
         )
+        self.shared_memory_conf: Dict = {"name": "pose",
+                                         "shape": self.SHARED_MEMORY_SHAPE,
+                                         "dtype": np.float32}
 
         self.response_locs: List[Tuple[float, float]] = []
         self._responded_loc: Tuple[float, float] = []
@@ -96,7 +99,8 @@ class OpenField(Behavior, dj.Manual):
         # To be set during setup
         self.screen_width: Optional[float] = None
         self.screen_pos: Optional[np.ndarray] = None
-        self.dlc: Optional[DLC] = None
+        self.dlc: Optional[DLCContinuousPoseEstimator] = None
+        self.dlcCorners: Optional[DLCCornerDetector] = None
 
         # Current position and timestamp
         self.tmst_cur: Optional[float] = None
@@ -130,48 +134,29 @@ class OpenField(Behavior, dj.Manual):
 
         self._initialize_dlc()
 
-    def _init_callback(self, corners_dict: Dict) -> None:
-        """
-        Callback function for DLC initialization.
-
-        Args:
-            corners_dict: a dictionary with affine matrix and the position of corners
-        """
-        self.corners_dict = corners_dict
-        self.dlc_init_event.set()
-
     def _initialize_dlc(self) -> None:
         """Initialize the DeepLabCut (DLC) object for pose estimation."""
         if self.interface.camera is None:
             raise ValueError("Camera is not initialized")
-
-        self.dlc = DLC(
-            self.interface.camera.process_queue,
-            self.corners_dict,
-            model_path=self.exp.params["model_path"],
-            shared_memory_shape=self.SHARED_MEMORY_SHAPE,
-            logger=self.logger,
-            arena_size=self.screen_width,
-            callback=self._init_callback,
-        )
-
-        # Wait for DLC initialization to complete
-        if not self.dlc_init_event.wait(timeout=30):
-            raise TimeoutError("DLC initialization timed out")
+        self.dlcCorners = DLCCornerDetector(frame_queue=self.interface.camera.process_queue,
+                                            model_path=self.exp.params["model_path_corners"],
+                                            arena_size=self.screen_width,
+                                            result=self.corners_dict,
+                                            logger=self.logger
+                                            )
+        self.dlcCorners.dlc_process.join(timeout=60)
+        if self.dlcCorners.dlc_process.is_alive():
+            raise Exception("Cannot find DLC corners!!")
+        self.dlcCorners.dlc_process.close()
         self.affine_matrix = self.corners_dict["affine_matrix"]
         self.corners = self.corners_dict["corners"]
 
-        print("#" * 20)
-        print("self.corners_dict: ", self.corners_dict)
-        self.logger.put(
-            table="Configuration.Arena",
-            tuple={
-                "affine_matrix": self.affine_matrix,
-                "corners": self.corners,
-                **self.logger.trial_key,
-            },
-            schema="behavior",
-        )
+        self.dlc = DLCContinuousPoseEstimator(frame_queue=self.interface.camera.process_queue,
+                                              model_path=self.exp.params["model_path"],
+                                              logger=self.logger,
+                                              shared_memory_conf=self.shared_memory_conf,
+                                              affine_matrix=self.affine_matrix,
+                                              wait_for_setup=True)
 
     def prepare(self, condition: Dict) -> None:
         """
@@ -213,7 +198,7 @@ class OpenField(Behavior, dj.Manual):
         }
         key = {**self.logger.trial_key, **act}
         self.logger.log("Activity", key, schema="behavior", priority=10)
-        self.logger.log("Activity.Touch", key, schema="behavior")
+        self.logger.log("Activity.OpenField", key, schema="behavior")
 
     def position_in_radius(
         self,
@@ -377,19 +362,12 @@ class OpenField(Behavior, dj.Manual):
         """Stop the camera recording"""
         # self.interface.camera.release()
         self.stop_done = True
+        print("interface release")
         self.interface.release()
         print("dlc close")
         self.dlc.stop()
         print("interface cleanup")
         self.interface.cleanup()
-        print("self.process_q.close()")
-        # self.logger.closeDatasets()
-        # print("Datasets closed")
-        # self.process_q.close()
-        # release shared memory
-        # self.sm.close()
-        # self.sm.unlink()
-        # join processes
 
     def exit(self) -> None:
         """Clean up resources and exit"""

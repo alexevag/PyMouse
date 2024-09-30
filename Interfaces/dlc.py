@@ -1,479 +1,456 @@
 import multiprocessing as mp
 import os
-import sys
 import time
-from datetime import datetime
-from multiprocessing.shared_memory import SharedMemory
-from typing import Any, Callable, Dict, Optional
+from abc import ABC
+from queue import Empty
+from typing import Any, Dict, Optional, Tuple
 
 import cv2
 import numpy as np
-from cv2 import getPerspectiveTransform
 from dlclive import DLCLive, Processor
 
-from utils.helper_functions import read_yalm
+from utils.helper_functions import read_yalm, shared_memory_array
 
 np.set_printoptions(suppress=True)
 os.environ["DLClight"] = "True"
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "1"
 
 
-class DLC:
+class DLCProcessor(ABC):
     """
-    DeepLabCut (DLC) integration for processing video frames and inferring pose.
+    Base class for DeepLabCut (DLC) model processing.
 
     Args:
-        path (str): Path to the DLC model.
-        shared_memory_shape: Shape of the shared memory array.
-        logger: Logger object for recording data.
-        joints: List of joints for pose estimation.
-
-    Attributes:
-        path (str): Path to the DLC model.
-        nose_y (int): Nose position along the y-axis.
-        theta (int): Angle parameter.
-        timestamp (int): Timestamp for pose data.
-        sm (SharedMemory): Shared memory block for pose data.
-        data (np.ndarray): Numpy array using shared memory for pose data.
-        setup_ready (mp.Event): Event indicating DLC setup readiness.
-        close (mp.Event): Event to signal the termination of DLC processing.
-        source_path (str): Source path for DLC data.
-        target_path (str): Target path for saving DLC data.
-        joints (list): List of joints for pose estimation.
-        logger: Logger object for recording data.
-        curr_pose (np.ndarray): Current pose data.
-        frame_process (mp.Queue): Queue for receiving video frames for processing.
-        dlc_proc (Processor): DLC processor instance.
-        dlc_live: DLCLive instance for live inference.
-        pose_hdf5: HDF5 dataset for raw pose data.
-        pose_hdf5_processed: HDF5 dataset for processed pose data.
-        frame: Current video frame.
+        frame_queue (mp.Queue): Queue for incoming frames.
+        model_path (str): Path to the DLC model.
+        logger (Optional[Any]): Logger object for logging processing results.
+        wait_for_setup (bool): Whether to wait for setup completion before returning.
     """
 
     def __init__(
         self,
-        frame_process: mp.Queue,
-        corners_dict: Dict[str, Any],
+        frame_queue: mp.Queue,
         model_path: str,
-        shared_memory_shape: tuple,
-        logger: Any,
-        arena_size: float,
-        callback: Optional[Callable[[np.ndarray, list], None]] = None
+        logger: Optional[Any] = None,
+        wait_for_setup: bool = False,
     ):
         self.model_path = model_path
-        self.nose_y = 0
-        self.theta = 0
-        self.timestamp = 0
-        self.rot_angle = self.calculate_rotation_angle(side=1, base=0.8)
-        self.arena_size = arena_size
-        self.callback = callback
-
-        # attach another shared memory block
-        self.sm = SharedMemory("pose")
-        # create a new numpy array that uses the shared memory
-        self._dlc_pose = np.ndarray(
-            shared_memory_shape, dtype=np.float32, buffer=self.sm.buf
-        )
-
-        self.setup_ready = mp.Event()
-        self.setup_ready.clear()
-        self.close = mp.Event()
-        self.close.clear()
+        self.frame_queue = frame_queue
+        self.frame_timeout = 1
         self.logger = logger
-        folder = (f"{self.logger.trial_key['animal_id']}"
-                  f"_{self.logger.trial_key['session']}/")
-        self.source_path = self.logger.video_source_path + folder
-        self.target_path = self.logger.video_target_path + folder
-        self.joints = read_yalm(
-            path=self.model_path,
-            filename="pose_cfg.yaml",
-            variable="all_joints_names",
+
+        self.setup_complete = mp.Event()
+        self.stop_signal = mp.Event()
+        self.finish_signal = mp.Event()
+        self.finish_signal.clear()
+
+        self.joint_names = read_yalm(self.model_path, "pose_cfg.yaml", "all_joints_names")
+
+        self.dlc_processor = Processor()
+        self.dlc_model = None
+
+        self.current_frame = None
+        self.dlc_process = mp.Process(target=self._setup_and_run)
+        self.dlc_process.start()
+
+        if wait_for_setup:
+            self._wait_for_setup()
+
+    def _wait_for_setup(self):
+        """Wait for the DLC model setup to complete."""
+        self.setup_complete.wait(timeout=30)
+
+    def _setup_and_run(self):
+        """Set up the DLC model and start processing."""
+        self._setup_model()
+        self.setup_complete.set()
+        self.process_frames()
+
+    def _setup_model(self):
+        """Initialize the DLC model."""
+        _, frame = self.frame_queue.get()
+        self.dlc_model = DLCLive(self.model_path, processor=self.dlc_processor)
+        self.dlc_model.init_inference(frame / 255)
+
+    def process_frames(self):
+        """Common method to process frames using the model."""
+        try:
+            while not self.finish_signal.is_set():
+                try:
+                    timestamp, frame = self.frame_queue.get(timeout=self.frame_timeout)
+                except Empty:
+                    print('Queue is empty')
+                    if self.stop_signal.is_set():
+                        break
+                    continue
+                pose = self.dlc_model.get_pose(frame / 255)
+                self._process_frame(pose, timestamp)
+        except Exception as e:
+            # Log any exceptions that occur during frame processing
+            print(f"Frame processing error: {e}")
+        finally:
+            # Ensure cleanup is always executed, even if an error occurs
+            print("Frame process has been finished.")
+            self._process_finish()
+        self.finish_signal.clear()
+
+    def _process_frame(self, pose, timestamp, **kwargs):
+        """Process frames using the DLC model. To be implemented by subclasses."""
+        pass
+
+    def _process_finish(self):
+        """Process frames using the DLC model. To be implemented by subclasses."""
+        pass
+
+    def stop(self):
+        """Stop the DLC processing."""
+        self.stop_signal.set()
+        self.dlc_process.join(timeout=60)
+        try:
+            self.dlc_process.close()
+        except Exception as e:
+            print(f"An error occurred while closing dlc_process: {e}")
+            self.dlc_process.terminate()  # Force terminate if not stopping.
+
+
+class DLCCornerDetector(DLCProcessor):
+    """
+    DLC processor for detecting arena corners.
+
+    Args:
+        frame_queue (mp.Queue): Queue for incoming frames.
+        model_path (str): Path to the DLC model.
+        arena_size (float): Size of the arena.
+        result (mp.managers.DictProxy): Shared dictionary to store results.
+        logger (Optional[Any]): Logger object for logging processing results.
+    """
+    CONFIDENCE_THRESHOLD = 0.85
+    MIN_CONFIDENT_FRAMES = 4
+
+    def __init__(
+        self,
+        frame_queue: mp.Queue,
+        model_path: str,
+        arena_size: float,
+        result: Dict,
+        logger: Optional[Any] = None,
+    ):
+        self.arena_size = arena_size
+        self.result = result  # Use the passed multiprocessing dictionary
+        self.detected_corners = []
+        super().__init__(frame_queue, model_path, logger)
+
+    def _process_frame(self, pose, timestamp):
+        """Detect arena corners and calculate perspective transform."""
+        if np.all(pose[:, 2] > self.CONFIDENCE_THRESHOLD):
+            self.detected_corners.append(pose)
+        else:
+            print("\rWait for high confidence corners scores", pose[:, 2], end="")
+        if len(self.detected_corners) >= self.MIN_CONFIDENT_FRAMES or self.stop_signal.is_set():
+            self.finish_signal.set()
+
+    def _process_finish(self):
+        self.corners = np.mean(np.array(self.detected_corners), axis=0)
+        self.affine_matrix, self.affine_matrix_inv = self._calculate_perspective_transform(
+            self.corners, self.arena_size
         )
 
-        h5s_filename = (f"{self.logger.trial_key['animal_id']}_"
-                        f"{self.logger.trial_key['session']}_"
-                        f"{datetime.now().strftime('%Y-%m-%d-%H-%M-%S')}.h5")
-        self.filename_dlc = "dlc_" + h5s_filename
-        self.logger.log_recording(
-            dict(
-                rec_aim="openfield",
-                software="EthoPy",
-                version="0.1",
-                filename=self.filename_dlc,
-                source_path=self.source_path,
-                target_path=self.target_path,
+        # update dict
+        self.result.update({
+            "corners": self.corners,
+            "affine_matrix": self.affine_matrix,
+            "affine_matrix_inv": self.affine_matrix_inv,
+        })
+
+        if self.logger:
+            # db log
+            self.logger.put(
+                table="Configuration.Arena",
+                tuple={
+                    "affine_matrix": self.affine_matrix,
+                    "corners": self.corners,
+                    **self.logger.trial_key,
+                },
+                schema="behavior",
             )
-        )
 
-        self.frame_process = frame_process
-        self.corners_dict = corners_dict
-        self.corners = None
-        self.affine_matrix = None
-        self.affine_matrix_inv = None
-
-        self.dlc_proc = Processor()
-        self.dlc_live = None
-
-        self.pose_hdf5 = None
-        self.pose_hdf5_processed = None
-        self.pose_hdf5_infer = None
-
-        self.frame = None
-
-        self.dlc_live_process = mp.Process(
-            target=self.setup,
-            args=(self.frame_process, self.corners_dict),
-        )
-        self.dlc_live_process.start()
-
-        # wait until the dlc setup hass finished initialization before start the experiment
-        start_time = time.time()
-        while not self.setup_ready.is_set():
-            elapsed_time = time.time() - start_time
-            for char in '|/-\\':
-                sys.stdout.write(
-                    f'\rWaiting for the initialization of dlc... {int(elapsed_time)}s {char}'
-                    )
-                sys.stdout.flush()
-                time.sleep(0.1)
-
-    def setup(self, frame_process, corners_dict):
+    @staticmethod
+    def _calculate_perspective_transform(corners: np.ndarray, screen_size: float) -> Tuple[np.ndarray, np.ndarray]:
         """
-        Perform DLC setup and initialization.
+        Calculate the perspective transform for the arena.
 
         Args:
-            frame_process (mp.Queue): Queue for receiving video frames for processing.
-            corners_dict (Dict): Dict for sending calibration data.
+            corners (np.ndarray): Detected corner coordinates.
+            screen_size (float): Size of the arena screen.
+
+        Returns:
+            Tuple[np.ndarray, np.ndarray]: Affine matrix and its inverse.
         """
+        pts1 = np.float32([corner[:2] for corner in corners])
+        pts2 = np.float32(
+            [[0, 0], [screen_size, 0], [0, screen_size], [screen_size, screen_size]]
+        )
+        m = cv2.getPerspectiveTransform(pts1, pts2)
+        return m, np.linalg.inv(m)
+
+
+class DLCContinuousPoseEstimator(DLCProcessor):
+    """
+    DLC processor for continuous pose estimation.
+
+    Args:
+        frame_queue (mp.Queue): Queue for incoming frames.
+        model_path (str): Path to the DLC model.
+        logger (Any): Logger object for logging processing results.
+        shared_memory_conf(Dict): information needed to define the shared memory.
+        affine_matrix (np.ndarray): Affine transformation matrix.
+    """
+
+    def __init__(
+        self,
+        frame_queue: mp.Queue,
+        model_path: str,
+        logger: Any,
+        shared_memory_conf: Dict,
+        affine_matrix: np.ndarray,
+        wait_for_setup: bool
+    ):
+        self.affine_matrix = affine_matrix
+        # rotation_angle is used in case an ear is missing check _update_pose
+        self.rotation_angle = self._calculate_rotation_angle(side=1, base=0.8)
+        # attach another shared memory block
+        self.logger = logger
+        self.result, self.shared_memory = shared_memory_array(name=shared_memory_conf['name'],
+                                                              rows_len=shared_memory_conf['shape'][0],
+                                                              columns_len=shared_memory_conf['shape'][1],
+                                                              )
+        super().__init__(frame_queue, model_path, logger, wait_for_setup)
+
+    def _setup_model(self):
+        super()._setup_model()
         if self.logger is not None:
-            joints_types = [("tmst", np.double)]
-            points = ["_x", "_y", "_score"]
-            for joint in self.joints:
-                for p in points:
-                    joints_types.append((joint + p, np.double))
+            self._setup_hdf5_datasets(self.logger)
+        # get a high confidence pose before start processing
+        self.prev_pose = self._initialize_pose()
 
-            self.pose_hdf5 = self.logger.createDataset(
-                dataset_name="dlc",
-                dataset_type=np.dtype(joints_types),
-                filename=self.filename_dlc,
-                log=False
-            )
-
-            self.pose_hdf5_infer = self.logger.createDataset(
-                dataset_name="dlc_infer",
-                dataset_type=np.dtype(joints_types),
-                filename=self.filename_dlc,
-                log=False
-            )
-
-            joints_types_processed = [
-                ("tmst", np.double),
-                ("head_x", np.double),
-                ("head_y", np.double),
-                ("angle", np.double),
-            ]
-
-            self.pose_hdf5_processed = self.logger.createDataset(
-                dataset_name="dlc_processed",
-                dataset_type=np.dtype(joints_types_processed),
-                filename=self.filename_dlc,
-                log=False
-            )
-
-        self.frame_process = frame_process
-        # find corners of the arena
-        self.corners = self.find_corners()
-        self.affine_matrix, self.affine_matrix_inv = self.perspective_transform(
-            self.corners, self.arena_size)
-        self.corners_dict["affine_matrix"] = self.affine_matrix
-        self.corners_dict["corners"] = self.corners
-        # initialize dlc models
-        self.dlc_live = DLCLive(self.model_path, processor=self.dlc_proc)
-        self.dlc_live.init_inference(self.frame_process.get()[1] / 255)
-
-        if self.callback:
-            self.callback(self.corners_dict)
-
-        # flag to indicate that all the dlc inits has finished before start experiment
-        self.setup_ready.set()
-
-        # start processing the camera frames
-        self.process()
-
-    def find_corners(self):
-        """
-        Find the corners of the arena based on the pixels of the image
-        to define the real space using a DL model.
-
-        Returns:
-            np.ndarray: The 4 corners of the arena.
-        """
-        dlc_corners_path = (
-            "/home/eflab/Desktop/"
-            "Openfield_test_box-Konstantina-2023-11-20/exported-models/"
-            "DLC_Openfield_test_box_resnet_50_iteration-3_shuffle-1"
+    def _setup_hdf5_datasets(self, logger):
+        """Set up HDF5 datasets for logging pose data."""
+        joints_types = [("timestamp", np.double)] + [
+            (f"{joint}{p}", np.double)
+            for joint in self.joint_names
+            for p in ["_x", "_y", "_score"]
+        ]
+        self.pose_hdf5 = logger.createDataset(
+            "dlc", np.dtype(joints_types), "dlc_pose.h5", log=False
+        )
+        self.pose_hdf5_infer = logger.createDataset(
+            "dlc_infer", np.dtype(joints_types), "dlc_pose_infer.h5", log=False
         )
 
-        # get a frame from the queue of the camera in order to init the dlc_live
-        _, frame = self.frame_process.get()
-        _frame = frame / 255
-        dlc_proc = Processor()
-        dlc_live = DLCLive(dlc_corners_path, processor=dlc_proc)
-        dlc_live.init_inference(_frame)
-        corners = []
-
-        # TODO: add a check here to make sure that corners are reasonable distanced
-        # use 4 images and find the mean of the corners
-        # in order to avoid frames with no visible corners
-        while len(corners) < 4:
-            _, _frame = self.frame_process.get()
-            pose = dlc_live.get_pose(_frame / 255)
-            print("\rWait for high confidence corners" + "." * (int(time.time()) % 4),
-                  end="",
-                  flush=True)
-            if np.all(pose[:, 2] > 0.85):
-                corners.append(dlc_live.get_pose(_frame / 255))
-        corners = np.mean(np.array(corners), axis=0)
-
-        # draw the corners in the last acquired frame
-        for i in range(len(corners)):
-            _frame = cv2.circle(
-                _frame,
-                (int(corners[i, 0]), int(corners[i, 1])),
-                radius=7,
-                color=(255, 0, 0),
-                thickness=-1,
+        processed_joints_types = [
+            ("timestamp", np.double),
+            ("head_x", np.double),
+            ("head_y", np.double),
+            ("angle", np.double),
+        ]
+        self.pose_hdf5_processed = logger.createDataset(
+            "dlc_processed",
+            np.dtype(processed_joints_types),
+            "dlc_pose_processed.h5",
+            log=False,
             )
-        # save the corners image to make sure that all 4 corners are vissible and correctly detected
-        cv2.imwrite("plane_corners.jpeg", _frame)
 
-        return corners
+    def _process_frame(self, pose, timestamp):
+        """Continuously process frames and estimate pose."""
+        if self.stop_signal.is_set():
+            if self.frame_queue.empty():
+                self.finish_signal.set()
+                return
 
-    def perspective_transform(self, corners, screen_size):
-        """_summary_
+        self.pose_hdf5.append(
+            "dlc", np.insert(np.double(pose.ravel()), 0, timestamp)
+        )
+
+        # check if position needs any intervation
+        current_pose = self._update_pose(pose, self.prev_pose)
+        final_pose = self._get_processed_pose(current_pose, timestamp)
+
+        # save pose to the shared memory
+        self.result[:] = final_pose
+        # save in the hdf5 files
+        self.pose_hdf5_infer.append("dlc_infer", np.insert(np.double(current_pose.ravel()), 0, timestamp))
+        self.pose_hdf5_processed.append("dlc_processed", final_pose)
+
+        self.prev_pose = current_pose
+
+    def _process_finish(self):
+        if self.logger is not None:
+            self.logger.closeDatasets()
+
+    def _initialize_pose(self, confidence_threshold: float = 0.01) -> np.ndarray:
+        """
+        Initialize the current pose with a high-confidence estimate.
+
+        Returns:
+            np.ndarray: Initial pose estimation.
+        """
+        while True:
+            if not self.frame_queue.empty():
+                _, frame = self.frame_queue.get()
+                pose = self.dlc_model.get_pose(frame / 255)
+                scores = np.array(pose[0:3][:, 2])
+                print("\rWait for high confidence pose", end="")
+                print(" scores ", scores, end="")
+                if np.sum(scores >= confidence_threshold) == 3:
+                    return pose
+            time.sleep(0.1)
+
+    def _update_pose(
+        self, pose: np.ndarray, prev_pose: np.ndarray, confidence_threshold: float = 0.85
+    ) -> np.ndarray:
+        """
+        Update the pose estimation based on current and previous poses.
 
         Args:
-            corners (_type_): _description_
-            screen_size (_type_): _description_
+            pose (np.ndarray): Current pose estimation.
+            prev_pose (np.ndarray): Previous pose estimation.
 
         Returns:
-            _type_: _description_
+            np.ndarray: Updated pose estimation.
         """
-        pts1 = np.float32([corners[0][:2], corners[1][:2], corners[2][:2], corners[3][:2]])
-        pts2 = np.float32([[0, 0], [screen_size, 0], [0, screen_size], [screen_size, screen_size]])
+        scores = pose[:3, 2]
+        low_confidence = scores < confidence_threshold
+        partial_pose = pose[:3, :-1]  # get nose, ear left and right
 
-        m = getPerspectiveTransform(pts1, pts2)  # image to real
-        m_inv = np.linalg.inv(m)
+        if np.sum(low_confidence) > 1:
+            # If more than one point has low confidence, do not update the pose
+            return prev_pose
+        elif np.sum(low_confidence) == 1:
+            high_confidence_points = partial_pose[np.logical_not(low_confidence)]
+            if low_confidence[0]:
+                # if nose has low confidence
+                partial_pose[low_confidence] = self._infer_apex(partial_pose[2, :], partial_pose[1, :])
+            else:
+                # if ear left has low confidence rotate with positive angle else negative
+                angle = self.rotation_angle if low_confidence[1] else -self.rotation_angle
+                partial_pose[low_confidence] = self._rotate_point(
+                    high_confidence_points[0], high_confidence_points[1], angle
+                )
+        pose[:3, :-1] = partial_pose
 
-        return m, m_inv
+        return pose
 
-    def rotate_point(self, origin, point, angle_rad):
+    def _get_processed_pose(
+        self, pose: np.ndarray, timestamp: float
+    ) -> Tuple[float, float, float, float]:
         """
-        Rotate a point by a given angle around a given origin.
+        Get the processed pose data including centroid and angle.
 
-        Parameters:
-        origin (tuple): The coordinates of the origin point (O).
-        point (tuple): The coordinates of the point to rotate (A).
-        angle (float): The angle of rotation in radians.
+        Args:
+            pose (np.ndarray): Current pose estimation.
+            timestamp (float): Timestamp of the current frame.
 
         Returns:
-        tuple: The coordinates of the rotated point (A').
+            Tuple[float, float, float, float]: Processed pose data (timestamp, x, y, angle).
         """
-        # Calculate the vector from the origin to the point
-        vector_oa = np.array(point) - np.array(origin)
+        triangle_vertices = np.array(pose[0:3, 0:2])
+        centroid = np.mean(triangle_vertices, axis=0)
+        vector_to_nose = triangle_vertices[0, :] - centroid
+        angle = self._compute_angle(vector_to_nose, np.array([1, 0]))
 
-        # Calculate the components of the rotation matrix
+        point = np.array([[centroid[0], centroid[1]]], dtype=np.float32)
+        transformed_centroid = cv2.perspectiveTransform(
+            np.array([point]), self.affine_matrix
+        ).ravel()
+
+        return timestamp, transformed_centroid[0], transformed_centroid[1], angle
+
+    @staticmethod
+    def _calculate_rotation_angle(side: float, base: float) -> float:
+        """
+        Calculate the rotation angle for pose estimation.
+
+        Args:
+            side (float): Length of the triangle side.
+            base (float): Length of the triangle base.
+
+        Returns:
+            float: Rotation angle in radians.
+        """
+        cos_angle = (2 * side**2 - base**2) / (2 * side**2)
+        return np.arccos(cos_angle)
+
+    @staticmethod
+    def _rotate_point(
+        origin: np.ndarray, point: np.ndarray, angle_rad: float
+    ) -> Tuple[float, float]:
+        """
+        Rotate a point around an origin by a given angle.
+
+        Args:
+            origin (np.ndarray): Origin point of rotation.
+            point (np.ndarray): Point to be rotated.
+            angle_rad (float): Angle of rotation in radians.
+
+        Returns:
+            Tuple[float, float]: Coordinates of the rotated point.
+        """
+        vector = point - origin
         rotation_matrix = np.array(
             [
                 [np.cos(angle_rad), -np.sin(angle_rad)],
                 [np.sin(angle_rad), np.cos(angle_rad)],
             ]
         )
-
         # Apply rotation matrix to the vector
-        rotated_vector = np.dot(rotation_matrix, vector_oa)
+        rotated_vector = np.dot(rotation_matrix, vector)
+        return tuple(origin + rotated_vector)
 
-        # Calculate the new position of the rotated point
-        return tuple(np.array(origin) + rotated_vector)
-
-    def infer_apex(self, vertex1, vertex2, scaling_factor=0.8):
+    @staticmethod
+    def _infer_apex(
+        vertex1: np.ndarray, vertex2: np.ndarray, scaling_factor: float = 0.8
+    ) -> Tuple[float, float]:
         """
-        Infer the coordinates of the apex in an isosceles triangle given two vertices.
+        Infer the apex of an isoscelic triangle given two vertices.
 
-        Parameters:
-        vertex1 (tuple): The coordinates of the first vertex.
-        vertex2 (tuple): The coordinates of the second vertex.
-        scaling_factor (float): Scaling factor for determining the distance of the apex from the
-        midpoint.
+        Args:
+            vertex1 (np.ndarray): First vertex of the triangle.
+            vertex2 (np.ndarray): Second vertex of the triangle.
+            scaling_factor (float): Empiricaly defined (0.8*dist(left_ear,right_ear)=dist(left or right ear, nose))
 
         Returns:
-        tuple: The coordinates of the inferred apex.
+            Tuple[float, float]: Coordinates of the inferred apex.
         """
-        # Convert vertices to numpy arrays
-        vertex1 = np.array(vertex1)
-        vertex2 = np.array(vertex2)
-
-        # Calculate the distance between the given vertices
-        distance = np.linalg.norm(vertex2 - vertex1)
-
-        # Calculate the midpoint of the given vertices
-        midpoint = (vertex1 + vertex2) / 2
-
-        # Calculate the unit vector along the line connecting the two vertices
-        line_vector = (vertex2 - vertex1) / distance
-
-        # Calculate the direction vector perpendicular to the line connecting the two vertices
+        distance = np.linalg.norm(vertex2 - vertex1)  # distance between the given vertices
+        midpoint = (vertex1 + vertex2) / 2  # midpoint of the given vertices
+        line_vector = (vertex2 - vertex1) / distance  # unit vector along the line connecting the two vertices
+        # direction vector perpendicular to the line connecting the two vertices
         perpendicular_vector = np.array([-line_vector[1], line_vector[0]])
-
-        # Calculate the length of the sides of the isosceles triangle
-        side_length = scaling_factor * distance
-
-        # Calculate the coordinates of the inferred apex
+        side_length = scaling_factor * distance  # length of the sides of the isosceles triangle
         apex = midpoint + perpendicular_vector * side_length
-
         return tuple(apex)
 
-    def calculate_rotation_angle(self, side, base):
+    @staticmethod
+    def _compute_angle(v1: np.ndarray, v2: np.ndarray) -> float:
         """
-        Calculate the rotation angle in radians using the law of cosines.
-
-        Parameters:
-        side (float): Length of one side of the triangle (nose_ear_right or nose_ear_left).
-        base (float): Length of the base of the triangle (ear_ear).
-
-        Returns:
-        float: The rotation angle in radians.
-        """
-        # Calculate the cosine of the angle using the law of cosines
-        cos_angle = (side**2 + side**2 - base**2) / (2 * side * side)
-
-        # Calculate the angle in radians using arccosine
-        angle_rad = np.arccos(cos_angle)
-
-        return angle_rad
-
-    def update_position(self, pose, prev_pose,  threshold=0.1):
-        """
-        Update the position based on the confidence of detected body parts.
+        Compute the angle between two vectors.
 
         Args:
-            pose (np.ndarray): Current pose information.
-            prev_pose (np.ndarray): Previous pose information.
-            threshold (float, optional): Confidence threshold. Defaults to 0.97.
+            v1 (np.ndarray): First vector.
+            v2 (np.ndarray): Second vector.
 
         Returns:
-            np.ndarray: Updated pose information.
+            float: Angle between
         """
-        scores = pose[:3, 2]  # Extract confidence scores for body parts
-        low_conf = scores < threshold
-        p_pose = pose[:3, :-1]
-
-        if np.sum(low_conf) > 1:
-            # If more than one point has low confidence, do not update the pose
-            pose = prev_pose
-        elif np.sum(low_conf) == 1:
-            high_conf_points = p_pose[np.logical_not(low_conf)]
-            if low_conf[0]:
-                # if nose has low confidence
-                p_pose[low_conf] = self.infer_apex(p_pose[2, :], p_pose[1, :])
-            else:
-                # if ear left has low confidence rotate with positive angle else negative
-                angle = self.rot_angle if low_conf[1] else -self.rot_angle
-                p_pose[low_conf] = self.rotate_point(
-                    high_conf_points[0], high_conf_points[1], angle
-                )
-        pose[:3, :-1] = p_pose
-
-        return pose
-
-    def init_curr_pos(self, threshold=0.01):
-        """
-        Wait for the first pose with three high-confidence points in the head of the animal.
-
-        Args:
-            threshold (float, optional): Confidence threshold. Defaults to 0.85.
-        """
-        high_conf_points = False
-        while not high_conf_points:
-            if self.frame_process.qsize() > 0:
-                _, self.frame = self.frame_process.get()
-                p = self.dlc_live.get_pose(self.frame / 255)
-                scores = np.array(p[0:3][:, 2])
-                print("\rWait for high confidence pose" + "." * (int(time.time()) % 4), end="")
-                print(" scores ", scores, end="")
-                if len(np.where(scores >= threshold)[0]) == 3:
-                    curr_pose = p
-                    high_conf_points = True
-                time.sleep(0.1)
-        return curr_pose
-
-    def process(self):
-        """
-        Run on a different process, wait to take an image, and return it.
-        """
-        # wait until a frame has all the 3 head point(nose and ear left/right)
-        prev_pose = self.init_curr_pos()
-
-        # run until close flag is set and frame_process is empty
-        while not self.close.is_set() or self.frame_process.qsize() > 0:
-            if self.frame_process.qsize() > 0:
-                tmst, self.frame = self.frame_process.get()
-
-                # get pose from frame
-                dlc_pose_raw = self.dlc_live.get_pose(self.frame / 255)
-                self.pose_hdf5.append(
-                    "dlc", np.insert(np.double(dlc_pose_raw.ravel()), 0, tmst)
-                )
-                # check if position need any intervation
-                curr_pose = self.update_position(dlc_pose_raw, prev_pose)
-                final_pose = self.get_position(curr_pose, tmst)
-                # save pose to the shared memory
-                self._dlc_pose[:] = final_pose
-                # save in the hdf5 files
-                self.pose_hdf5_infer.append(
-                    "dlc_infer", np.insert(np.double(curr_pose.ravel()), 0, tmst)
-                )
-                self.pose_hdf5_processed.append(
-                    "dlc_processed",
-                    final_pose,
-                )
-                prev_pose = curr_pose
-            else:
-                time.sleep(0.001)
-        self.logger.closeDatasets()
-
-    def get_position(self, pose, tmst):
-        """Example coordinates for triangle vertices and square vertices
-        pose[0]->nose, pose[1]->ear_left, pose[2]->ear_right
-        """
-        triangle_vertices = np.array(pose[0:3, 0:2])
-
-        # Step 1: Find the centroid of the triangle
-        centroid_triangle = np.mean(triangle_vertices, axis=0)
-        # Step 2: Compute the vector from the centroid to nose of the triangle
-        vector_to_nose = triangle_vertices[0, :] - centroid_triangle
-        # Step 3: Compute the angle (phase) between the vectors
-        angle = self.compute_angle(
-            vector_to_nose, np.array([1, 0])
-        )  # Assuming reference vector is [1, 0]
-
-        point = np.array([[centroid_triangle[0], centroid_triangle[1]]], dtype=np.float32)
-        centroid_triangle = cv2.perspectiveTransform(np.array([point]), self.affine_matrix).ravel()
-
-        return tmst, centroid_triangle[0], centroid_triangle[1], angle
-
-    def compute_angle(self, v1, v2):
-        """Compute the angle between two vectors in degrees."""
         dot_product = np.dot(v1, v2)
         cross_product = np.cross(v1, v2)
         angle = np.arctan2(cross_product, dot_product)
-        angle_degrees = np.degrees(angle)
-        return angle_degrees
+        return np.degrees(angle)
 
     def stop(self):
-        """stop processing"""
-        self.close.set()
-        self.sm.close()
-        self.sm.unlink()
-        self.dlc_live_process.join()
-        self.dlc_live_process.close()
+        """Stop the continuous pose estimation and clean up resources."""
+        try:
+            super().stop()
+        finally:
+            self.shared_memory.close()
+            self.shared_memory.unlink()

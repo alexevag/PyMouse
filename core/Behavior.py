@@ -132,6 +132,18 @@ class Activity(dj.Manual):
         time	     	    : int           	# time from session start (ms)
         """
 
+    class OpenField(dj.Part):
+        definition = """
+        # animal OpenField activity
+        -> Activity
+        animal_loc_x               : float
+        animal_loc_y               : float
+        resp_loc_x                 : float
+        resp_loc_y                 : float
+        in_loc                     : tinyint
+        time	     	           : int
+        """
+
     class Position(dj.Part):
         definition = """
         # 2D possition timestamps

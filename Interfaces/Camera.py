@@ -287,10 +287,9 @@ class Camera(ABC):
         Set the stop event and join the write runner.
         """
         self.stop.set()
-        time.sleep(1)
+        time.sleep(3)
         # TODO: use join and close (possible issue due to h5 files)
-        self.process_queue.close()
-        self.camera_process.join(timeout=5)
+        self.camera_process.join(timeout=30)
         # check if the process is still alive
         if self.camera_process.is_alive():
             print("self.process_queue is terminated")
