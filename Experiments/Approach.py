@@ -82,7 +82,6 @@ class PreTrial(Experiment):
             self.beh.prepare(self.curr_cond)
             self.stim.prepare(self.curr_cond)
             super().entry()
-            self.logger.ping()
             self.stim.start_stim()
 
     def next(self):
@@ -107,7 +106,6 @@ class Trial(Experiment):
 
     def run(self):
         self.stim.present()
-        self.logger.ping()
         # check if animal is in any response location
         self.response = self.beh.in_location(
             self.beh.response_locs,
@@ -193,7 +191,6 @@ class InterTrial(Experiment):
     def run(self):
         if self.beh.is_licking() and self.params.get("noresponse_intertrial"):
             self.state_timer.start()
-        self.logger.ping()
 
     def next(self):
         if self.is_stopped():
@@ -217,7 +214,6 @@ class Hydrate(Experiment):
             self.stim.ready_stim()
             self.beh.reward()
             time.sleep(1)
-        self.logger.ping()
 
     def next(self):
         if self.is_stopped():  # if wake up then update session
@@ -238,7 +234,6 @@ class Offtime(Experiment):
     def run(self):
         if self.logger.setup_status != 'sleeping' and self.beh.is_sleep_time():
             self.logger.update_setup_info({'status': 'sleeping'})
-        self.logger.ping()
         time.sleep(1)
 
     def next(self):
