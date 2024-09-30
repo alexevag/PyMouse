@@ -81,7 +81,7 @@ class Camera(ABC):
             else datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
         )
 
-        with open("dj_local_conf.json", "r", encoding="utf-8") as f:
+        with open("local_conf.json", "r", encoding="utf-8") as f:
             conf = json.load(f)
 
         self.source_path = (
@@ -92,6 +92,7 @@ class Camera(ABC):
             self._check_json_config("video_target_path", conf)
             + f"/Recordings/{self.filename}/"
         )
+
 
         try:
             self.serve_port = conf["server.port"]
@@ -237,23 +238,28 @@ class Camera(ABC):
         source = Path(self.source_path)
         target = Path(self.target_path)
 
-        if not source.exists():
-            raise ValueError(f"Source path {source} does not exist.")
+        if not source.is_dir():
+            raise ValueError(f"Source path {source} does not exist or is not a directory.")
 
         if not target.exists():
-            raise ValueError(f"Target path {target} does not exist.")
+            raise ValueError(f"Target path {target} does not exist or is not a directory.")
 
         files = [(entry, target) for entry in source.iterdir() if entry.is_file()]
 
-        # Use all available CPUs
-        with Pool(os.cpu_count()) as p:
-            p.map(self.copy_file, files)
+        with Pool(processes=min(2, os.cpu_count()-1)) as pool:
+            pool.map(self.copy_file, files)
+
+        # Clean up if the source directory is empty
+        if not any(source.iterdir()):
+            source.rmdir()
+            print(f"Deleted the empty folder: {source}")
 
     def setup(self) -> None:
         """
         Set up the frame queue and the capture and write runners.
         """
         self.frame_queue = Queue()
+        # self.process_queue.cancel_join_thread()
         self.capture_runner = threading.Thread(target=self.rec)
         self.write_runner = threading.Thread(
             target=self.dequeue, args=(self.frame_queue,)
@@ -261,13 +267,16 @@ class Camera(ABC):
 
     def start_rec(self) -> None:
         """
-        Start the capture and write runners.
+        Start the capture and write runners with exception handling.
         """
-        self.setup()
-        self.capture_runner.start()
-        self.write_runner.start()
-        self.capture_runner.join()
-        self.write_runner.join()
+        try:
+            self.setup()
+            self.capture_runner.start()
+            self.write_runner.start()
+            self.capture_runner.join()
+            self.write_runner.join()
+        except Exception as cam_error:
+            raise f"Exception occurred during recording: {cam_error}"
 
     def dequeue(self, frame_queue: Queue) -> None:
         """
@@ -617,16 +626,20 @@ class PiCamera(Camera):
         super().setup()
 
     def rec(self) -> None:
-        """Start recording."""
-        if self.recording.is_set():
-            warnings.warn("Camera is already recording!")
-            return
+        """Start recording"""
+        try:
+            if self.recording.is_set():
+                warnings.warn("Camera is already recording!")
+                return
 
-        self.recording_init()
-        self.cam.start()
-        while not self.stop.is_set():
-            time.sleep(1)
-        self._stop_recording()
+            self.recording_init()
+            self.cam.start()
+            while not self.stop.is_set():
+                time.sleep(1)
+        except Exception as rec_error:
+            raise f"Error during camera recording: {rec_error}"
+        finally:
+            self._stop_recording()
 
     def recording_init(self) -> None:
         """Initialize the recording."""

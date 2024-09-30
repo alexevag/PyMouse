@@ -1,17 +1,21 @@
 import base64
 import functools
 import hashlib
+import logging
 import os
 import sys
 import threading
 import time
 from datetime import datetime
+from getpass import getpass
 from itertools import product
 from multiprocessing import Event as ProcessEvent
 from multiprocessing.shared_memory import SharedMemory
 from typing import Any, Dict, List, Tuple, Union
 
+import datajoint as dj
 import numpy as np
+from scipy import ndimage
 
 try:
     import yaml
@@ -21,9 +25,36 @@ except ImportError:
 
 try:
     from scipy import ndimage
-    IMPORT_SCIPY=True
+    IMPORT_SCIPY = True
 except ImportError:
-    IMPORT_SCIPY=False
+    IMPORT_SCIPY = False
+
+
+def create_virtual_modules(schemata, create_tables=True,  create_schema=True):
+    try:
+        if dj.config["database.password"] is None:
+            dj.config["database.password"] = getpass(prompt="Please enter DataJoint password: ")
+
+        # Create virtual modules
+        public_conn = dj.Connection(
+            dj.config["database.host"],
+            dj.config["database.user"],
+            dj.config["database.password"],
+        )
+        virtual_modules = {}
+        for name, schema in schemata.items():
+            virtual_modules[name] = dj.create_virtual_module(name,
+                                                             schema,
+                                                             create_tables=create_tables,
+                                                             create_schema=create_schema,
+                                                             connection=public_conn)
+        return virtual_modules, public_conn
+    except Exception as e:
+        error_message = (f"Failed to connect to the database due "
+                         f"to an internet connection error: {e}")
+        logging.error("ERROR %s", error_message)
+        raise Exception(error_message) from e
+
 
 def sub2ind(array_shape, rows, cols):
     return rows * array_shape[1] + cols
@@ -170,7 +201,8 @@ def generate_conf_list(folder_path):
         contents.append([i, file_name, '', current_datetime])
     return contents
 
-def read_yalm(path:str, filename:str, variable:str) -> Any:
+
+def read_yalm(path: str, filename: str, variable: str) -> Any:
     """
     Read a YAML file and return a specific variable.
 
@@ -201,6 +233,7 @@ def read_yalm(path:str, filename:str, variable:str) -> Any:
                 raise KeyError(f"The variable '{variable}' is not found in the YAML file.") from exc
     else:
         raise FileNotFoundError(f"There is no file '{filename}' in directory: '{path}'")
+
 
 def shared_memory_array(name: str, rows_len: int, columns_len: int, dtype: str = "float32") -> tuple:
     """
@@ -235,6 +268,7 @@ def shared_memory_array(name: str, rows_len: int, columns_len: int, dtype: str =
 
     return shared_array, sm
 
+
 def get_display_width_height(size: float, aspect_ratio: float) -> Tuple[float, float]:
     """
     Calculate the width and height of the screen in millimeters.
@@ -256,6 +290,7 @@ def get_display_width_height(size: float, aspect_ratio: float) -> Tuple[float, f
     width = aspect_ratio * height
 
     return round(width, 2), round(height, 2)
+
 
 def wait_for_flag(msg: str, flag: Union[threading.Event, ProcessEvent]) -> float:
     """
