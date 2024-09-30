@@ -702,10 +702,14 @@ class Logger:
             schema (str): The schema for the configuration.
         """
         for config_table in config_tables:
-            configuration_data = (
-                getattr(experiment.SetupConfiguration, config_table.split('.')[1])
-                & {"setup_conf_idx": params["setup_conf_idx"]}
-            ).fetch(as_dict=True)
+            try:
+                configuration_data = (
+                    getattr(experiment.SetupConfiguration, config_table.split('.')[1])
+                    & {"setup_conf_idx": params["setup_conf_idx"]}
+                ).fetch(as_dict=True)
+            except Exception as e:
+                logging.info(f"Configuration tables is not defined: {e}")
+                continue
             # put the configuration data in the configuration table
             # it can be a list of configurations (e.g have two ports with different ids)
             for conf in configuration_data:
