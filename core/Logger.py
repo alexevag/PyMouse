@@ -854,23 +854,7 @@ class Logger:
             },
         )
 
-    def log_recording(self, key: Dict[str, any]):
-        """
-        Logs a recording.
-        Args:
-            key (dict): A dictionary containing information about the recording.
-        Returns:
-            None
-        """
-        recs = self.get(
-            schema="recording",
-            table="Recording",
-            key=self.trial_key,
-            fields=["rec_idx"],
-        )
-        rec_idx = 1 if len(recs)==0 else max(recs) + 1
-        self.log("Recording", data={**key, "rec_idx": rec_idx}, schema="recording", block=True)
-
+ 
     def get_setup_info(self, field):
         """
         Retrieve specific setup information from an experiment control table.
@@ -1018,7 +1002,7 @@ class Logger:
 
         return self.datasets[filename]
 
-    def log_recording(self, rec_key):
+    def log_recording(self, rec_key: Dict[str, any]):
         """
         Logs a new recording entry with an incremented recording index.
 
@@ -1028,10 +1012,7 @@ class Logger:
         the provided recording key (rec_key) and the calculated recording index.
 
         Args:
-        - rec_key (dict): A dictionary containing the key information for the recording entry.
-
-        The method assumes the existence of a `get` method to retrieve existing recordings
-        and a `log` method to log the new recording entry.
+        - rec_key (dict): A dictionary containing information for the recording entry.
         """
         recs = self.get(
             schema="recording",
