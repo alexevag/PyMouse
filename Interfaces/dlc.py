@@ -5,10 +5,18 @@ from abc import ABC
 from queue import Empty
 from typing import Any, Dict, Optional, Tuple
 
-import cv2
+try:
+    import cv2
+    IMPORT_CV2 = True
+except ImportError:
+    IMPORT_CV2 = False
 import numpy as np
-from dlclive import DLCLive, Processor
 
+try:
+    from dlclive import DLCLive, Processor
+    IMPORT_DLCLive = True
+except ImportError:
+    IMPORT_DLCLive = False
 from utils.helper_functions import read_yalm, shared_memory_array
 
 np.set_printoptions(suppress=True)
@@ -34,6 +42,11 @@ class DLCProcessor(ABC):
         logger: Optional[Any] = None,
         wait_for_setup: bool = False,
     ):
+        if not globals()["IMPORT_DLCLive"]:
+            raise ImportError(
+                "Please install dlc_live before using DLCProcessor.\n"
+                "sudo pip3 install deeplabcut-live"
+            )
         self.model_path = model_path
         self.frame_queue = frame_queue
         self.frame_timeout = 1
@@ -135,6 +148,13 @@ class DLCCornerDetector(DLCProcessor):
         result: Dict,
         logger: Optional[Any] = None,
     ):
+        if not globals()["IMPORT_CV2"]:
+            raise ImportError(
+                "The cv2 package could not be imported. "
+                "Please install it before using DLCCornerDetector.\n"
+                "You can install cv2 using pip:\n"
+                "sudo pip3 install opencv-python"
+            )
         self.arena_size = arena_size
         self.result = result  # Use the passed multiprocessing dictionary
         self.detected_corners = []
@@ -215,6 +235,13 @@ class DLCContinuousPoseEstimator(DLCProcessor):
         affine_matrix: np.ndarray,
         wait_for_setup: bool
     ):
+        if not globals()["IMPORT_CV2"]:
+            raise ImportError(
+                "The cv2 package could not be imported. "
+                "Please install it before using DLCContinuousPoseEstimator.\n"
+                "You can install cv2 using pip:\n"
+                "sudo pip3 install opencv-python"
+            )
         self.affine_matrix = affine_matrix
         # rotation_angle is used in case an ear is missing check _update_pose
         self.rotation_angle = self._calculate_rotation_angle(side=1, base=0.8)
