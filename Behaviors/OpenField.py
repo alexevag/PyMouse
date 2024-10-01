@@ -5,7 +5,7 @@ from typing import Dict, List, Optional, Tuple, Union
 import datajoint as dj
 import numpy as np
 
-from core.Behavior import Behavior, behavior
+from core.Behavior import Behavior, BehCondition, behavior
 from Interfaces.dlc import DLCContinuousPoseEstimator, DLCCornerDetector
 from utils.helper_functions import get_display_width_height, shared_memory_array
 
