@@ -81,7 +81,13 @@ class RPPorts(Interface):
             self.thread.submit(self.__pwd_out, self.channels['Odor'][delivery_port[i]], odor_duration, dutycycle[i])
 
     def opto_stim(self, duration, dutycycle):
-        self.thread.submit(self.__pwd_out, self.channels['Opto'], duration, dutycycle)
+        # self.thread.submit(self.__pwd_out, self.channels['Opto'], duration, dutycycle)
+        self.thread.submit(self.__pulse_out, self.channels['Opto'], duration, 100, 20)
+
+    def opto_stim_stop(self):
+        self.Pulser.wave_tx_stop()
+        self.Pulser.write(self.channels['Opto'], 0)
+        self.Pulser.wave_clear()
 
     def sync_out(self, state=True):
         self.GPIO.output(self.channels['Sync']['out'], state)
