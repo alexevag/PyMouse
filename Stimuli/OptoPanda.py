@@ -37,4 +37,4 @@ class Opto(Panda, dj.Manual):
     def stop(self):
         if not self.flag_no_stim:
             self.exp.interface.opto_stim_stop()
-        super().start() 
+        super().stop() 
