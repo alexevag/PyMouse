@@ -369,6 +369,16 @@ class OpenField(Behavior, dj.Manual):
         print("interface cleanup")
         self.interface.cleanup()
 
+    def __del__(self):
+        """Destructor to ensure shared memory is cleaned up"""
+        if hasattr(self, 'sm'):
+            try:
+                self.sm.close()
+                self.sm.unlink()
+            except FileNotFoundError:
+                # The shared memory has already been unlinked or doesn't exist
+                pass
+
     def exit(self) -> None:
         """Clean up resources and exit"""
         super().exit()
