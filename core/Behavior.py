@@ -6,7 +6,9 @@ from datetime import datetime, timedelta
 from importlib import import_module
 from queue import Queue
 
+import datajoint as dj
 import matplotlib.pyplot as plt
+import numpy as np
 from matplotlib import cm
 
 from core.Experiment import *
@@ -166,7 +168,7 @@ class Configuration(dj.Manual):
     class Port(dj.Part):
         definition = """
         # Probe identity
-        -> Configuration
+        -> master
         port                     : tinyint                      # port id
         type="Lick"              : varchar(24)                 # port type
         ---
@@ -179,7 +181,7 @@ class Configuration(dj.Manual):
     class Ball(dj.Part):
         definition = """
         # Ball information
-        -> Configuration
+        -> master
         ---
         ball_radius=0.125        : float                   # in meters
         material="styrofoam"     : varchar(64)             # ball material
@@ -187,13 +189,20 @@ class Configuration(dj.Manual):
         discription              : varchar(256)
         """
 
-    class Arena(dj.Part):
+    class Camera(dj.Part):
         definition = """
-        # Arena position
-        -> Configuration
+        # Camera information
+        -> master
+        camera_idx               : tinyint
         ---
-        corners                  : blob             # corners position
-        affine_matrix            : blob             # affine matrix from image to real space
+        fps                      : tinyint UNSIGNED
+        resolution_x             : smallint
+        resolution_y             : smallint
+        shutter_speed            : smallint
+        iso                      : smallint
+        file_format              : varchar(256)
+        video_aim                : enum('eye','body','openfield')
+        discription              : varchar(256)
         """
 
 @behavior.schema
@@ -258,6 +267,7 @@ class Behavior:
     """ This class handles the behavior variables """
     cond_tables, interface, required_fields, curr_cond, response, licked_port, logging = [], [], [], [], [], 0, False
     default_key, reward_amount, choice_history, reward_history = dict(), dict(), list(), list()
+    conf_tables = {}
 
     def setup(self, exp):
         self.params = exp.params
@@ -269,7 +279,7 @@ class Behavior:
         self.punish_history = list()
         self.reward_amount = dict()
         self.response, self.last_lick = Activity(), Activity()
-        self.response_queue = Queue(maxsize = 4)
+        self.response_queue = Queue(maxsize=4)
         self.logging = True
         interface_module = self.logger.get(schema='experiment',
                                            table='SetupConfiguration',
@@ -282,7 +292,7 @@ class Behavior:
     def is_ready(self, init_duration, since=0):
         return True, 0
 
-    def get_response(self, since:int=0, clear:bool=True) -> bool:
+    def get_response(self, since: int = 0, clear: bool = True) -> bool:
         """
         Return a boolean indicating whether there is any response since the given time.
 
@@ -308,14 +318,14 @@ class Behavior:
         while not self.response_queue.empty():
             _response = self.response_queue.get()
             if not _valid_response and _response.time >= since and _response.port:
-                self.response = _response 
+                self.response = _response
                 _valid_response = True
                 
         # return True if there is any valid response since the given time, False otherwise
         if _valid_response: return True
         return False
 
-    def is_licking(self, since:int=0, reward:bool=False, clear:bool=True) -> int:
+    def is_licking(self, since: int = 0, reward: bool = False, clear: bool = True) -> int:
         """checks if there is any licking since the given time
 
         is_licking is used in two ways:
@@ -355,7 +365,7 @@ class Behavior:
     def exit(self):
         self.logging = False
 
-    def log_activity(self, activity_key:dict):
+    def log_activity(self, activity_key: dict):
         """log the activity of the animal in the database, update the last_lick, licked_port variables, 
         append to the response queue if the queue is not full and return the time of the activity 
 
