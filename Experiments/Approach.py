@@ -256,3 +256,51 @@ class Offtime(Experiment):
 class Exit(Experiment):
     def run(self):
         self.stop()
+
+
+@experiment.schema
+class SetupConfigurationArena(dj.Lookup, dj.Manual):
+    definition = """
+    # Camera information
+    -> experiment.SetupConfiguration
+    arena_idx                : tinyint
+    ---
+    size                      : int
+    discription               : varchar(256)
+    """
+
+    class Port(dj.Lookup, dj.Part):
+        definition = """
+        # Camera information
+        -> master
+        -> experiment.SetupConfiguration.Port
+        port                      : tinyint
+        ---
+        position_x                : float
+        position_y                : float
+        discription               : varchar(256)
+        """
+
+    class Screen(dj.Lookup, dj.Part):
+        definition = """
+        # Camera information
+        -> master
+        -> experiment.SetupConfiguration.Screen
+        screen_idx              : tinyint UNSIGNED
+        ---
+        start_x                 : float
+        start_y                : float
+        stop_x                  : float
+        stop_y                  : float
+        discription               : varchar(256)
+        """
+
+    class Models(dj.Lookup, dj.Part):
+        definition = """
+        # Arena position
+        -> master
+        model_name              : varchar(256)
+        ---
+        model_path              : varchar(256)
+        target="bodyparts"      : enum('bodyparts','corners')
+        """

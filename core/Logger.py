@@ -603,6 +603,7 @@ class Logger:
         #  Init the informations(e.g. trial_id=0, session) in control table
         self._init_control_table(params)
 
+        self.setup_conf_idx = params["setup_conf_idx"]
         self.logger_timer.start()  # Start session time
 
     def _init_session_params(self, params: Dict[str, Any]) -> None:
@@ -718,6 +719,24 @@ class Logger:
                     tuple={**conf, **self.trial_key},
                     schema=schema,
                 )
+
+    def log_setup_confs(self, conf_tables):
+        for target_table, source_tables in conf_tables.items():
+            # target_schema, target_table = split_first_word(target_table)
+            if isinstance(source_tables, str):
+                source_tables = [source_tables]
+            if len(source_tables) > 1:
+                source_tables[0] = source_tables[0]+".proj()"
+                t = ((eval(" * ".join(source_tables)) & f"setup_conf_idx={self.setup_conf_idx}")
+                     * (behavior.Configuration() & self.trial_key))
+            else:
+                t = ((eval(" * ".join(source_tables))() & f"setup_conf_idx={self.setup_conf_idx}")
+                     * (behavior.Configuration() & self.trial_key))
+
+            dict_ins = (t).fetch(as_dict=True)
+            if len(dict_ins) == 0:
+                raise Exception(f"Update tables {source_tables} for setup conf idx {self.setup_conf_idx}")
+            eval(target_table)().insert(dict_ins, ignore_extra_fields=True, skip_duplicates=True)
 
     def _init_control_table(self, params: Dict[str, Any]) -> None:
         """

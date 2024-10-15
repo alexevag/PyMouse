@@ -6,8 +6,9 @@ import datajoint as dj
 import numpy as np
 
 from core.Behavior import Behavior, BehCondition, behavior
+from core.Logger import stimulus
 from Interfaces.dlc import DLCContinuousPoseEstimator, DLCCornerDetector
-from utils.helper_functions import get_display_width_height, shared_memory_array
+from utils.helper_functions import shared_memory_array
 
 
 @behavior.schema
@@ -64,6 +65,14 @@ class OpenField(Behavior, dj.Manual):
         "OpenField.Init",
         "OpenField.Reward",
     ]
+
+    conf_tables = {"behavior.ConfigurationArena": "experiment.SetupConfigurationArena",
+                   "behavior.ConfigurationArena.Port": ["experiment.SetupConfiguration.Port",
+                                                        "experiment.SetupConfigurationArena.Port"],
+                   "behavior.ConfigurationArena.Screen": ["experiment.SetupConfiguration.Screen",
+                                                          "experiment.SetupConfigurationArena.Screen"],
+                   "behavior.ConfigurationArena.Models": "experiment.SetupConfigurationArena.Models"}
+
     required_fields = ["reward_loc_x", "reward_amount"]
     default_key = {"reward_type": "water", "response_port": 1, "reward_port": 1}
 
@@ -97,9 +106,10 @@ class OpenField(Behavior, dj.Manual):
         self.response_loc: Optional[Tuple[float, float]] = None
 
         # To be set during setup
-        self.screen_width: Optional[float] = None
         self.screen_pos: Optional[np.ndarray] = None
+        self.dlc_model_path: str = ""
         self.dlc: Optional[DLCContinuousPoseEstimator] = None
+        self.dlc_corners_path: str = ""
         self.dlcCorners: Optional[DLCCornerDetector] = None
 
         # Current position and timestamp
@@ -107,7 +117,7 @@ class OpenField(Behavior, dj.Manual):
         self.x_cur: Optional[float] = None
         self.y_cur: Optional[float] = None
         self.angle_cur: Optional[float] = None
-        self.stop_done = False
+        self.stop_calls = 0
 
     def setup(self, exp) -> None:
         """
@@ -117,19 +127,37 @@ class OpenField(Behavior, dj.Manual):
             exp: The experiment object containing parameters.
         """
         super().setup(exp)
-        self.stop_done = False
+        self.logger.log_setup_confs(self.conf_tables)
+        self.stop_calls = 0
+        setup_conf_idx = exp.params['setup_conf_idx']
+        self.Arena_params = self.logger.get(schema='experiment',
+                                            table='SetupConfigurationArena',
+                                            key={'setup_conf_idx': setup_conf_idx},
+                                            as_dict=True
+                                            )[0]
 
-        # get screen parameters
-        screen_params = self.logger.get(
-            table="SetupConfiguration.Screen",
-            key=f"setup_conf_idx={self.exp.params['setup_conf_idx']}",
-            as_dict=True,
-        )[0]
-        self.screen_width, _ = get_display_width_height(
-            screen_params["size"], screen_params["aspect"]
-        )
+        self.Arena_Screens_pos = self.logger.get(schema='experiment',
+                                                 table='SetupConfigurationArena.Screen',
+                                                 key={'setup_conf_idx': setup_conf_idx},
+                                                 as_dict=True,
+                                                 )[0]
+
+        self.dlc_corners_path = self.logger.get(schema='experiment',
+                                                table='SetupConfiguration.Arena.Models',
+                                                fields=['model_path'],
+                                                key={'setup_conf_idx': setup_conf_idx,
+                                                     'target': 'corners'})[0]
+
+        self.dlc_body_path = self.logger.get(schema='experiment',
+                                             table='SetupConfiguration.Arena.Models',
+                                             fields=['model_path'],
+                                             key={'setup_conf_idx': setup_conf_idx,
+                                                  'target': 'bodyparts'})[0]
+        self.arena_size = self.Arena_params['size']
+
         self.screen_pos = np.array(
-            [[self.screen_width, 0], [self.screen_width, self.screen_width]]
+            [[self.Arena_Screens_pos['start_x'], self.Arena_Screens_pos['start_y']],
+             [self.Arena_Screens_pos['stop_x'], self.Arena_Screens_pos['stop_y']]]
         )
 
         self._initialize_dlc()
@@ -139,8 +167,8 @@ class OpenField(Behavior, dj.Manual):
         if self.interface.camera is None:
             raise ValueError("Camera is not initialized")
         self.dlcCorners = DLCCornerDetector(frame_queue=self.interface.camera.process_queue,
-                                            model_path=self.exp.params["model_path_corners"],
-                                            arena_size=self.screen_width,
+                                            model_path=self.dlc_corners_path,
+                                            arena_size=self.arena_size,
                                             result=self.corners_dict,
                                             logger=self.logger
                                             )
@@ -152,7 +180,7 @@ class OpenField(Behavior, dj.Manual):
         self.corners = self.corners_dict["corners"]
 
         self.dlc = DLCContinuousPoseEstimator(frame_queue=self.interface.camera.process_queue,
-                                              model_path=self.exp.params["model_path"],
+                                              model_path=self.dlc_body_path,
                                               logger=self.logger,
                                               shared_memory_conf=self.shared_memory_conf,
                                               affine_matrix=self.affine_matrix,
@@ -170,10 +198,10 @@ class OpenField(Behavior, dj.Manual):
 
         # find real position of the objects
         self.response_locs = self.screen_pos_to_real_pos(
-            self.curr_cond["response_loc_x"], const_dim=self.screen_width
+            self.curr_cond["response_loc_x"], const_dim=self.arena_size
         )
         self.reward_locs = self.screen_pos_to_real_pos(
-            self.curr_cond["reward_loc_x"], const_dim=self.screen_width
+            self.curr_cond["reward_loc_x"], const_dim=self.arena_size
         )
 
         self.init_loc = [
@@ -361,7 +389,7 @@ class OpenField(Behavior, dj.Manual):
     def stop(self):
         """Stop the camera recording"""
         # self.interface.camera.release()
-        self.stop_done = True
+        self.stop_done += 1
         print("interface release")
         self.interface.release()
         print("dlc close")
@@ -382,6 +410,63 @@ class OpenField(Behavior, dj.Manual):
     def exit(self) -> None:
         """Clean up resources and exit"""
         super().exit()
-        if not self.stop_done:
+        if self.stop_calls == 0:
             self.stop()
         self.interface.cleanup()
+
+
+@behavior.schema
+class ConfigurationArena(dj.Manual):
+    definition = """
+    # Camera information
+    arena_idx                : tinyint
+    -> behavior.Configuration
+    ---
+    size                      : int
+    discription               : varchar(256)
+    """
+
+    class Port(dj.Part):
+        definition = """
+        # Camera information
+        -> master
+        -> behavior.Configuration.Port
+        port                      : tinyint
+        ---
+        position_x                : float
+        position_y                : float
+        discription               : varchar(256)
+        """
+
+    class Screen(dj.Part):
+        definition = """
+        # Camera information
+        -> master
+        -> stimulus.Configuration.Screen
+        screen_idx              : tinyint UNSIGNED
+        ---
+        start_x                   : float
+        start_y                   : float
+        stop_x                    : float
+        stop_y                    : float
+        discription               : varchar(256)
+        """
+
+    class Corners(dj.Part):
+        definition = """
+        # Arena position
+        -> master
+        ---
+        corners                  : blob             # corners position
+        affine_matrix            : blob             # affine matrix from image to real space
+        """
+
+    class Models(dj.Part):
+        definition = """
+        # Arena position
+        -> master
+        name              : varchar(256)
+        ---
+        path              : varchar(256)
+        target="bodyparts"      : enum('bodyparts','corners')
+        """
