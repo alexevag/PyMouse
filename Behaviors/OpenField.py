@@ -428,8 +428,8 @@ class ConfigurationArena(dj.Manual):
         definition = """
         # Camera information
         -> master
-        -> behavior.Configuration.Port
         port                      : tinyint
+        type="Lick"               : enum('Lick','Proximity')
         ---
         position_x                : float
         position_y                : float
@@ -440,7 +440,6 @@ class ConfigurationArena(dj.Manual):
         definition = """
         # Camera information
         -> master
-        -> stimulus.Configuration.Screen
         screen_idx              : tinyint UNSIGNED
         ---
         start_x                   : float
