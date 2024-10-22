@@ -1,7 +1,7 @@
 import multiprocessing as mp
 import os
 import time
-from abc import ABC
+from abc import ABC, abstractmethod
 from datetime import datetime
 from queue import Empty
 from typing import Any, Dict, Optional, Tuple
@@ -21,8 +21,41 @@ except ImportError:
 from utils.helper_functions import read_yalm, shared_memory_array
 
 np.set_printoptions(suppress=True)
-os.environ["DLClight"] = "True"
-os.environ["TF_CPP_MIN_LOG_LEVEL"] = "1"
+
+
+class ModelInterface(ABC):
+    @abstractmethod
+    def setup_model(self, frame):
+        pass
+
+    @abstractmethod
+    def get_pose(self, frame):
+        pass
+
+
+class DLCModel(ModelInterface):
+    @classmethod
+    def set_environment_variables(cls):
+        os.environ["DLClight"] = "True"
+        os.environ["TF_CPP_MIN_LOG_LEVEL"] = "1"
+
+    def __init__(self, path: str):
+        if not globals()["IMPORT_DLCLive"]:
+            raise ImportError(
+                "Please install dlc_live before using DLCProcessor.\n"
+                "sudo pip3 install deeplabcut-live"
+            )
+        self.set_environment_variables()
+        self.dlc_model = None
+        self.path = path
+        self.dlc_processor = Processor()
+
+    def setup_model(self, frame):
+        self.dlc_model = DLCLive(self.path, processor=self.dlc_processor)
+        self.dlc_model.init_inference(frame / 255)
+
+    def get_pose(self, frame):
+        return self.dlc_model.get_pose(frame / 255)
 
 
 class DLCProcessor(ABC):
@@ -48,7 +81,7 @@ class DLCProcessor(ABC):
                 "Please install dlc_live before using DLCProcessor.\n"
                 "sudo pip3 install deeplabcut-live"
             )
-        self.model_path = model_path
+        self.model = DLCModel(model_path)
         self.frame_queue = frame_queue
         self.frame_timeout = 1
         self.logger = logger
@@ -57,11 +90,6 @@ class DLCProcessor(ABC):
         self.stop_signal = mp.Event()
         self.finish_signal = mp.Event()
         self.finish_signal.clear()
-
-        self.joint_names = read_yalm(self.model_path, "pose_cfg.yaml", "all_joints_names")
-
-        self.dlc_processor = Processor()
-        self.dlc_model = None
 
         self.current_frame = None
         self.dlc_process = mp.Process(target=self._setup_and_run)
@@ -83,8 +111,7 @@ class DLCProcessor(ABC):
     def _setup_model(self):
         """Initialize the DLC model."""
         _, frame = self.frame_queue.get()
-        self.dlc_model = DLCLive(self.model_path, processor=self.dlc_processor)
-        self.dlc_model.init_inference(frame / 255)
+        self.model.setup_model(frame)
 
     def process_frames(self):
         """Common method to process frames using the model."""
@@ -100,7 +127,7 @@ class DLCProcessor(ABC):
                         break  # Queue became empty while we were draining it
 
                 if latest_frame is not None:
-                    pose = self.get_pose(latest_frame)
+                    pose = self.model.get_pose(latest_frame)
                     self._process_frame(pose, latest_timestamp)
                 else:
                     # If stop signal is set wait until there is no new frames(Close camera)
@@ -280,6 +307,7 @@ class DLCContinuousPoseEstimator(DLCProcessor):
                 )
             )
         super().__init__(frame_queue, model_path, logger, wait_for_setup)
+        self.joint_names = read_yalm(self.model.path, "pose_cfg.yaml", "all_joints_names")
 
     def _setup_model(self):
         super()._setup_model()
@@ -352,7 +380,7 @@ class DLCContinuousPoseEstimator(DLCProcessor):
         while True:
             if not self.frame_queue.empty():
                 _, frame = self.frame_queue.get()
-                pose = self.dlc_model.get_pose(frame / 255)
+                pose = self.model.get_pose(frame / 255)
                 scores = np.array(pose[0:3][:, 2])
                 print("\rWait for high confidence pose", end="")
                 print(" scores ", scores, end="")
