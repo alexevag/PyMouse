@@ -253,6 +253,10 @@ class DLCContinuousPoseEstimator(DLCProcessor):
                                                               columns_len=shared_memory_conf['shape'][1],
                                                               )
         if self.logger:
+            folder = (f"Recordings/{self.logger.trial_key['animal_id']}"
+                      f"_{self.logger.trial_key['session']}/")
+            self.source_path = self.logger.video_source_path + folder
+            self.target_path = self.logger.video_target_path + folder
             h5s_filename = (f"{self.logger.trial_key['animal_id']}_"
                             f"{self.logger.trial_key['session']}_"
                             f"{datetime.now().strftime('%Y-%m-%d-%H-%M-%S')}.h5")
