@@ -582,7 +582,7 @@ class PiCamera(Camera):
         resolution_y: int = 720,
         fps: int = 15,
         sensor_mode: int = 1,
-        shutter_speed: int = 10000,
+        exposure: int = 10000,
         file_format: str = "rgb",
         logger_timer: Optional["Timer"] = None,
         **kwargs,
@@ -599,7 +599,7 @@ class PiCamera(Camera):
 
         self.sensor_mode = sensor_mode
         self.resolution = (resolution_x, resolution_y)
-        self.shutter_speed = shutter_speed
+        self.exposure = exposure
         self.file_format = file_format
         self.tmst_output = None
 
@@ -684,7 +684,7 @@ class PiCamera(Camera):
             },
             controls={
                 "FrameDurationLimits": (int(1e6 / self.fps), int(1e6 / self.fps)),
-                "ExposureTime": int(self.shutter_speed),
+                "ExposureTime": int(self.exposure),
                 # "AfMode": controls.AfModeEnum.Manual,
                 # "LensPosition": 0.0,
             },

@@ -529,8 +529,12 @@ class SetupConfiguration(dj.Lookup, dj.Manual):
         fps                      : tinyint UNSIGNED
         resolution_x             : smallint
         resolution_y             : smallint
-        shutter_speed            : smallint
-        iso                      : smallint
+        exposure=NULL            : int
+        wb_temperature=NULL      : int
+        saturation=NULL          : int
+        gain=NULL                : int
+        contrast=NULL            : int
+        brightness=NULL          : int
         file_format              : varchar(256)
         video_aim                : enum('eye','body','openfield')
         discription              : varchar(256)
