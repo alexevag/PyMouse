@@ -67,10 +67,8 @@ class OpenField(Behavior, dj.Manual):
     ]
 
     conf_tables = {"behavior.ConfigurationArena": "experiment.SetupConfigurationArena",
-                   "behavior.ConfigurationArena.Port": ["experiment.SetupConfiguration.Port",
-                                                        "experiment.SetupConfigurationArena.Port"],
-                   "behavior.ConfigurationArena.Screen": ["experiment.SetupConfiguration.Screen",
-                                                          "experiment.SetupConfigurationArena.Screen"],
+                   "behavior.ConfigurationArena.Port": "experiment.SetupConfigurationArena.Port",
+                   "behavior.ConfigurationArena.Screen": "experiment.SetupConfigurationArena.Screen",
                    "behavior.ConfigurationArena.Models": "experiment.SetupConfigurationArena.Models"}
 
     required_fields = ["reward_loc_x", "reward_amount"]

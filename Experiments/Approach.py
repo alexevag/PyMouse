@@ -273,8 +273,8 @@ class SetupConfigurationArena(dj.Lookup, dj.Manual):
         definition = """
         # Camera information
         -> master
-        -> experiment.SetupConfiguration.Port
         port                      : tinyint
+        type="Lick"               : enum('Lick','Proximity')
         ---
         position_x                : float
         position_y                : float
@@ -285,7 +285,6 @@ class SetupConfigurationArena(dj.Lookup, dj.Manual):
         definition = """
         # Camera information
         -> master
-        -> experiment.SetupConfiguration.Screen
         screen_idx              : tinyint UNSIGNED
         ---
         start_x                 : float
