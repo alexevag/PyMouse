@@ -2,6 +2,7 @@ import multiprocessing as mp
 import os
 import time
 from abc import ABC
+from datetime import datetime
 from queue import Empty
 from typing import Any, Dict, Optional, Tuple
 
@@ -251,6 +252,21 @@ class DLCContinuousPoseEstimator(DLCProcessor):
                                                               rows_len=shared_memory_conf['shape'][0],
                                                               columns_len=shared_memory_conf['shape'][1],
                                                               )
+        if self.logger:
+            h5s_filename = (f"{self.logger.trial_key['animal_id']}_"
+                            f"{self.logger.trial_key['session']}_"
+                            f"{datetime.now().strftime('%Y-%m-%d-%H-%M-%S')}.h5")
+            self.filename_dlc = "dlc_" + h5s_filename
+            self.logger.log_recording(
+                dict(
+                    rec_aim="openfield",
+                    software="EthoPy",
+                    version="0.1",
+                    filename=self.filename_dlc,
+                    source_path=self.source_path,
+                    target_path=self.target_path,
+                )
+            )
         super().__init__(frame_queue, model_path, logger, wait_for_setup)
 
     def _setup_model(self):
@@ -268,10 +284,10 @@ class DLCContinuousPoseEstimator(DLCProcessor):
             for p in ["_x", "_y", "_score"]
         ]
         self.pose_hdf5 = logger.createDataset(
-            "dlc", np.dtype(joints_types), "dlc_pose.h5", log=False
+            "dlc", np.dtype(joints_types), self.filename_dlc, log=False
         )
         self.pose_hdf5_infer = logger.createDataset(
-            "dlc_infer", np.dtype(joints_types), "dlc_pose_infer.h5", log=False
+            "dlc_infer", np.dtype(joints_types), self.filename_dlc, log=False
         )
 
         processed_joints_types = [
@@ -283,7 +299,7 @@ class DLCContinuousPoseEstimator(DLCProcessor):
         self.pose_hdf5_processed = logger.createDataset(
             "dlc_processed",
             np.dtype(processed_joints_types),
-            "dlc_pose_processed.h5",
+            self.filename_dlc,
             log=False,
             )
 
