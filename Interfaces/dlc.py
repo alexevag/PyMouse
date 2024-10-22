@@ -90,15 +90,23 @@ class DLCProcessor(ABC):
         """Common method to process frames using the model."""
         try:
             while not self.finish_signal.is_set():
-                try:
-                    timestamp, frame = self.frame_queue.get(timeout=self.frame_timeout)
-                except Empty:
-                    print('Queue is empty')
+                latest_frame = None
+                latest_timestamp = None
+                # Drain the queue, keeping only the latest frame
+                while not self.frame_queue.empty():
+                    try:
+                        latest_timestamp, latest_frame = self.frame_queue.get_nowait()
+                    except Empty:
+                        break  # Queue became empty while we were draining it
+
+                if latest_frame is not None:
+                    pose = self.get_pose(latest_frame)
+                    self._process_frame(pose, latest_timestamp)
+                else:
+                    # If stop signal is set wait until there is no new frames(Close camera)
                     if self.stop_signal.is_set():
                         break
-                    continue
-                pose = self.dlc_model.get_pose(frame / 255)
-                self._process_frame(pose, timestamp)
+                    time.sleep(0.01)  # Short sleep to prevent busy-waiting
         except Exception as e:
             # Log any exceptions that occur during frame processing
             print(f"Frame processing error: {e}")
