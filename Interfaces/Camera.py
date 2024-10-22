@@ -93,7 +93,6 @@ class Camera(ABC):
             + f"/Recordings/{self.filename}/"
         )
 
-
         try:
             self.serve_port = conf["server.port"]
         except KeyError:
@@ -344,11 +343,7 @@ class WebCam(Camera):
         Camera (class): The parent class for capturing and recording video frames.
 
     Attributes:
-        stream (list): List for storing stream data.
         fps (int): Frames per second for recording.
-        time (int): Time attribute.
-        iframe (int): iframe attribute.
-        reported_framerate (int): Reported framerate attribute.
         recording (bool): Flag indicating whether recording is active.
         camera (cv2.VideoCapture): OpenCV VideoCapture instance for accessing the webcam.
 
@@ -361,12 +356,9 @@ class WebCam(Camera):
         self,
         resolution_x: int = 1280,
         resolution_y: int = 720,
-        fps: int = 15,
-        sensor_mode: int = 1,
-        shutter_speed: int = 10000,
-        file_format: str = "rgb",
+        fps: int = 30,
         logger_timer: Optional["Timer"] = None,
-        **kwargs,
+        **kwargs
     ):
         """
         Initializes a WebCam instance.
@@ -380,14 +372,22 @@ class WebCam(Camera):
             RuntimeError: If there is no available camera.
 
         """
-        self.fps = 30
-        self.iframe = 0
+        self.fps = fps
         self.video_output = None
         self.dataset = None
         self.tmst_output = None
         self.logger_timer = logger_timer
         self.resolution_x = resolution_x
         self.resolution_y = resolution_y
+
+        # Initialize optional camera parameters
+        self.exposure = kwargs.get('exposure')
+        self.wb_temperature = kwargs.get('wb_temperature')
+        self.saturation = kwargs.get('saturation')
+        self.gain = kwargs.get('gain')
+        self.contrast = kwargs.get('contrast')
+        self.brightness = kwargs.get('brightness')
+
         if not globals()["IMPORT_CV2"]:
             raise ImportError(
                 "The cv2 package could not be imported. "
@@ -492,6 +492,28 @@ class WebCam(Camera):
             )
         self.camera.set(cv2.CAP_PROP_FPS, self.fps)
         self.set_resolution(self.resolution_x, self.resolution_y)
+        # self._set_camera_property(cv2.CAP_PROP_FRAME_WIDTH, self.resolution_x)
+        # self._set_camera_property(cv2.CAP_PROP_FRAME_HEIGHT, self.resolution_y)
+
+        if self.exposure:
+            self.camera.set(cv2.CAP_PROP_AUTO_EXPOSURE, 1)  # Disable auto exposure
+            self._set_camera_property(cv2.CAP_PROP_EXPOSURE, self.exposure)
+        if self.wb_temperature:
+            self.camera.set(cv2.CAP_PROP_AUTO_WB, 0.0)  # Disable auto white balance
+            self._set_camera_property(cv2.CAP_PROP_WB_TEMPERATURE, self.wb_temperature)
+        self._set_camera_property(cv2.CAP_PROP_SATURATION, self.saturation)
+        self._set_camera_property(cv2.CAP_PROP_GAIN, self.gain)
+        self._set_camera_property(cv2.CAP_PROP_CONTRAST, self.contrast)
+        self._set_camera_property(cv2.CAP_PROP_BRIGHTNESS, self.brightness)
+
+    def _set_camera_property(self, property_id, value):
+        if value is not None:
+            result = self.camera.set(property_id, value)
+            if result:
+                actual_value = self.camera.get(property_id)
+                if abs(actual_value - value) > 1e-6:  # Compare with small tolerance for floating-point values
+                    logging.warning(f"Camera property {property_id} was set to "
+                                    f"{actual_value}, not the requested {value}")
 
     def rec(self):
         """
@@ -519,7 +541,6 @@ class WebCam(Camera):
                 continue
             tmst = self.logger_timer.elapsed_time()
             # tmst = first_tmst + (self.camera.get(cv2.CAP_PROP_POS_MSEC)-cam_tmst_first)
-            # self.iframe += 1
             self.frame_queue.put((tmst, image))
             # Check if a separate process queue is provided
             if self.process_queue is not False:
