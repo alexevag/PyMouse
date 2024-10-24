@@ -141,14 +141,14 @@ class OpenField(Behavior, dj.Manual):
                                                  )[0]
 
         self.dlc_corners_path = self.logger.get(schema='experiment',
-                                                table='SetupConfiguration.Arena.Models',
-                                                fields=['model_path'],
+                                                table='SetupConfigurationArena.Models',
+                                                fields=['path'],
                                                 key={'setup_conf_idx': setup_conf_idx,
                                                      'target': 'corners'})[0]
 
         self.dlc_body_path = self.logger.get(schema='experiment',
-                                             table='SetupConfiguration.Arena.Models',
-                                             fields=['model_path'],
+                                             table='SetupConfigurationArena.Models',
+                                             fields=['path'],
                                              key={'setup_conf_idx': setup_conf_idx,
                                                   'target': 'bodyparts'})[0]
         self.arena_size = self.Arena_params['size']
