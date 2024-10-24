@@ -379,6 +379,7 @@ class WebCam(Camera):
         self.logger_timer = logger_timer
         self.resolution_x = resolution_x
         self.resolution_y = resolution_y
+        self.res_set: bool = True
 
         # Initialize optional camera parameters
         self.exposure = kwargs.get('exposure')
@@ -449,9 +450,7 @@ class WebCam(Camera):
         self.camera.set(cv2.CAP_PROP_FRAME_WIDTH, width)
         self.camera.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
         check, image = self.get_frame()
-        if check:
-            shape = np.shape(image)
-            self.resolution_x, self.resolution_y = shape[0], shape[1]
+        return (image.shape[1], image.shape[0]) != (width, height)
 
     def get_frame(self) -> Tuple[bool, np.ndarray]:
         """
@@ -491,7 +490,7 @@ class WebCam(Camera):
                 "No camera is available. Please check if the camera is connected and functional."
             )
         self.camera.set(cv2.CAP_PROP_FPS, self.fps)
-        self.set_resolution(self.resolution_x, self.resolution_y)
+        self.res_set = self.set_resolution(self.resolution_x, self.resolution_y)
         # self._set_camera_property(cv2.CAP_PROP_FRAME_WIDTH, self.resolution_x)
         # self._set_camera_property(cv2.CAP_PROP_FRAME_HEIGHT, self.resolution_y)
 
@@ -540,6 +539,9 @@ class WebCam(Camera):
                 print("Failed to read frame from camera. Error:", error)
                 continue
             tmst = self.logger_timer.elapsed_time()
+            if not self.res_set:
+                image = cv2.resize(image, (self.resolution_x, self.resolution_y))
+
             # tmst = first_tmst + (self.camera.get(cv2.CAP_PROP_POS_MSEC)-cam_tmst_first)
             self.frame_queue.put((tmst, image))
             # Check if a separate process queue is provided
