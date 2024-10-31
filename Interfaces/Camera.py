@@ -86,11 +86,11 @@ class Camera(ABC):
 
         self.source_path = (
             self._check_json_config("video_source_path", conf)
-            + f"/Recordings/{self.filename}/"
+            + f"/{self.filename}/"
         )
         self.target_path = (
             self._check_json_config("video_target_path", conf)
-            + f"/Recordings/{self.filename}/"
+            + f"/{self.filename}/"
         )
 
         try:
@@ -106,7 +106,7 @@ class Camera(ABC):
 
         self.post_process = mp.Event()
         self.post_process.clear()
-        self.process_queue = mp.Queue()
+        self.process_queue = mp.Queue(maxsize=2)
         self.process_queue.cancel_join_thread()
 
         self.stop = mp.Event()
@@ -408,11 +408,12 @@ class WebCam(Camera):
                 "-r": str(self.fps),
             },
             outputdict={
-                "-vcodec": "libx264",
-                "-pix_fmt": "yuv420p",
-                "-r": str(self.fps),
-                "-preset": "ultrafast",
-            },
+                        "-vcodec": "libx264",
+                        "-pix_fmt": "rgb24",  # Change to rgb24 or another format
+                        "-r": str(self.fps),
+                        "-preset": "ultrafast",
+                        "-s": f"{self.resolution_x}x{self.resolution_y}",
+                    },
         )
         if self.logger is not None:
             self.tmst_type = "h5"
@@ -447,10 +448,12 @@ class WebCam(Camera):
             width (int): width of frame
             height (int): height of frame
         """
-        self.camera.set(cv2.CAP_PROP_FRAME_WIDTH, width)
-        self.camera.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
+
+        self.camera.set(cv2.CAP_PROP_FRAME_WIDTH, 960)
+        self.camera.set(cv2.CAP_PROP_FRAME_HEIGHT, 600)
         check, image = self.get_frame()
-        return (image.shape[1], image.shape[0]) != (width, height)
+        print("image shape set resolution ", image.shape)
+        return (image.shape[1], image.shape[0]) == (533, 300)
 
     def get_frame(self) -> Tuple[bool, np.ndarray]:
         """
@@ -491,9 +494,9 @@ class WebCam(Camera):
             )
         self.camera.set(cv2.CAP_PROP_FPS, self.fps)
         self.res_set = self.set_resolution(self.resolution_x, self.resolution_y)
-        # self._set_camera_property(cv2.CAP_PROP_FRAME_WIDTH, self.resolution_x)
-        # self._set_camera_property(cv2.CAP_PROP_FRAME_HEIGHT, self.resolution_y)
-
+        if not self.res_set:
+            logging.warning(f"Camera resolution cannot be set tp {(self.resolution_x, self.resolution_y)}"
+                f",resize of frames will be used!!")
         if self.exposure:
             self.camera.set(cv2.CAP_PROP_AUTO_EXPOSURE, 1)  # Disable auto exposure
             self._set_camera_property(cv2.CAP_PROP_EXPOSURE, self.exposure)
@@ -541,15 +544,15 @@ class WebCam(Camera):
             tmst = self.logger_timer.elapsed_time()
             if not self.res_set:
                 image = cv2.resize(image, (self.resolution_x, self.resolution_y))
-
             # tmst = first_tmst + (self.camera.get(cv2.CAP_PROP_POS_MSEC)-cam_tmst_first)
             self.frame_queue.put((tmst, image))
             # Check if a separate process queue is provided
             if self.process_queue is not False:
                 # Ensure the process queue doesn't exceed its maximum size
                 if self.process_queue.full():
-                    self.process_queue.get()
-                self.process_queue.put_nowait((tmst, image))
+                    pass
+                else:
+                    self.process_queue.put_nowait((tmst, image))
 
         self.camera.release()
         self.recording.clear()
