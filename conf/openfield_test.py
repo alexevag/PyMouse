@@ -18,9 +18,8 @@ interp = (
 session_params = {
     "trial_selection": "random",
     "noresponse_intertrial": True,
-    "setup_conf_idx": 14,
+    "setup_conf_idx": 16,
     "max_reward": 1000,
-    "model_path": "/home/eflab/Desktop/dummy_dlc/dlc_dummy-alex-2023-10-18/exported-models/DLC_dlc_dummy_resnet_50_iteration-2_shuffle-1/",
 }
 
 
