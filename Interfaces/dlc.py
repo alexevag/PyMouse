@@ -49,6 +49,7 @@ class DLCModel(ModelInterface):
         self.dlc_model = None
         self.path = path
         self.dlc_processor = Processor()
+        self.joint_names = read_yalm(self.path, "pose_cfg.yaml", "all_joints_names")
 
     def setup_model(self, frame):
         self.dlc_model = DLCLive(self.path, processor=self.dlc_processor)
@@ -81,6 +82,7 @@ class DLCProcessor(ABC):
                 "Please install dlc_live before using DLCProcessor.\n"
                 "sudo pip3 install deeplabcut-live"
             )
+        print("model_path ", model_path)
         self.model = DLCModel(model_path)
         self.frame_queue = frame_queue
         self.frame_timeout = 1
@@ -110,17 +112,19 @@ class DLCProcessor(ABC):
 
     def _setup_model(self):
         """Initialize the DLC model."""
-        _, frame = self.frame_queue.get()
+        _, frame = self.frame_queue.get_nowait()
         self.model.setup_model(frame)
 
     def process_frames(self):
         """Common method to process frames using the model."""
         try:
             while not self.finish_signal.is_set():
+                start_t = time.time()
                 latest_frame = None
                 latest_timestamp = None
                 # Drain the queue, keeping only the latest frame
                 while not self.frame_queue.empty():
+                    # print(' multiprocessing.Queue, try to use qsize() ', self.frame_queue.qsize())
                     try:
                         latest_timestamp, latest_frame = self.frame_queue.get_nowait()
                     except Empty:
@@ -129,6 +133,7 @@ class DLCProcessor(ABC):
                 if latest_frame is not None:
                     pose = self.model.get_pose(latest_frame)
                     self._process_frame(pose, latest_timestamp)
+                    # print("time ", time.time()-start_t)
                 else:
                     # If stop signal is set wait until there is no new frames(Close camera)
                     if self.stop_signal.is_set():
@@ -229,6 +234,9 @@ class DLCCornerDetector(DLCProcessor):
                 },
                 schema="behavior",
             )
+    # for i in range(len(obj_pos_)):
+    #     frame = cv2.circle(frame, (int(obj_pos_[i,0]),int(obj_pos_[i,1])), radius=90, color=(0, 255, 255), thickness=3)
+    #     cv2.imwrite("test.jpeg", self.frame)
 
     @staticmethod
     def _calculate_perspective_transform(corners: np.ndarray, screen_size: float) -> Tuple[np.ndarray, np.ndarray]:
@@ -290,8 +298,8 @@ class DLCContinuousPoseEstimator(DLCProcessor):
         if self.logger:
             folder = (f"Recordings/{self.logger.trial_key['animal_id']}"
                       f"_{self.logger.trial_key['session']}/")
-            self.source_path = self.logger.video_source_path + folder
-            self.target_path = self.logger.video_target_path + folder
+            self.source_path = self.logger.source_path + folder
+            self.target_path = self.logger.target_path + folder
             h5s_filename = (f"{self.logger.trial_key['animal_id']}_"
                             f"{self.logger.trial_key['session']}_"
                             f"{datetime.now().strftime('%Y-%m-%d-%H-%M-%S')}.h5")
@@ -307,7 +315,6 @@ class DLCContinuousPoseEstimator(DLCProcessor):
                 )
             )
         super().__init__(frame_queue, model_path, logger, wait_for_setup)
-        self.joint_names = read_yalm(self.model.path, "pose_cfg.yaml", "all_joints_names")
 
     def _setup_model(self):
         super()._setup_model()
@@ -320,7 +327,7 @@ class DLCContinuousPoseEstimator(DLCProcessor):
         """Set up HDF5 datasets for logging pose data."""
         joints_types = [("timestamp", np.double)] + [
             (f"{joint}{p}", np.double)
-            for joint in self.joint_names
+            for joint in self.model.joint_names
             for p in ["_x", "_y", "_score"]
         ]
         self.pose_hdf5 = logger.createDataset(
@@ -379,11 +386,11 @@ class DLCContinuousPoseEstimator(DLCProcessor):
         """
         while True:
             if not self.frame_queue.empty():
-                _, frame = self.frame_queue.get()
-                pose = self.model.get_pose(frame / 255)
+                _, frame = self.frame_queue.get_nowait()
+                pose = self.model.get_pose(frame)
+                print("frame ", frame)
                 scores = np.array(pose[0:3][:, 2])
-                print("\rWait for high confidence pose", end="")
-                print(" scores ", scores, end="")
+                print("\rWait for high confidence pose scores ", scores, end="")
                 if np.sum(scores >= confidence_threshold) == 3:
                     return pose
             time.sleep(0.1)
