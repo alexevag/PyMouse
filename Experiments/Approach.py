@@ -298,8 +298,8 @@ class SetupConfigurationArena(dj.Lookup, dj.Manual):
         definition = """
         # Arena position
         -> master
-        model_name              : varchar(256)
+        name              : varchar(256)
         ---
-        model_path              : varchar(256)
+        path              : varchar(256)
         target="bodyparts"      : enum('bodyparts','corners')
         """
