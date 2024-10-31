@@ -110,7 +110,7 @@ class Trial(Experiment):
 
     def next(self):
         if not self.resp_ready and self.beh.is_off_proximity():  # did not wait
-             return 'Abort'
+            return 'Abort'
         elif self.response and not self.beh.is_correct():  # response to incorrect probe
             return 'Punish'
         elif self.response and self.beh.is_correct():      # response to correct probe
@@ -122,8 +122,8 @@ class Trial(Experiment):
         else:
             return 'Trial'
 
-    # def exit(self):
-    #     self.stim.stop()  # stop stimulus when timeout
+    def exit(self):
+        self.stim.stop()  # stop stimulus when timeout
 
 
 class Abort(Experiment):
