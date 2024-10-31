@@ -159,6 +159,9 @@ class DLCProcessor(ABC):
     def stop(self):
         """Stop the DLC processing."""
         self.stop_signal.set()
+        if not self.dlc_process.is_alive():
+            print("dlc_process is not alive")
+            return
         self.dlc_process.join(timeout=60)
         try:
             self.dlc_process.close()
