@@ -6,7 +6,6 @@ import datajoint as dj
 import numpy as np
 
 from core.Behavior import Behavior, BehCondition, behavior
-from core.Logger import stimulus
 from Interfaces.dlc import DLCContinuousPoseEstimator, DLCCornerDetector
 from utils.helper_functions import shared_memory_array
 
@@ -80,9 +79,6 @@ class OpenField(Behavior, dj.Manual):
         """Initialize the OpenField behavior class."""
         # create a queue that returns the arena corners
         self.manager = mp.Manager()
-        self.corners_dict: Dict = self.manager.dict()
-        # Create an event for DLC initialization
-        self.dlc_init_event = self.manager.Event()
 
         # Create shared memory array for pose
         self.pose, self.sm = shared_memory_array(
@@ -99,16 +95,12 @@ class OpenField(Behavior, dj.Manual):
         self.reward_locs: List[Tuple[float, float]] = []
         self.init_loc: List[Tuple[float, float]] = ()
         self.position_tmst = 0
-        self.affine_matrix: np.ndarray = np.array([])
-        self.corners: List[Tuple[float, float]] = []
         self.response_loc: Optional[Tuple[float, float]] = None
 
         # To be set during setup
         self.screen_pos: Optional[np.ndarray] = None
         self.dlc_model_path: str = ""
         self.dlc: Optional[DLCContinuousPoseEstimator] = None
-        self.dlc_corners_path: str = ""
-        self.dlcCorners: Optional[DLCCornerDetector] = None
 
         # Current position and timestamp
         self.tmst_cur: Optional[float] = None
@@ -140,17 +132,6 @@ class OpenField(Behavior, dj.Manual):
                                                  as_dict=True,
                                                  )[0]
 
-        self.dlc_corners_path = self.logger.get(schema='experiment',
-                                                table='SetupConfigurationArena.Models',
-                                                fields=['path'],
-                                                key={'setup_conf_idx': setup_conf_idx,
-                                                     'target': 'corners'})[0]
-
-        self.dlc_body_path = self.logger.get(schema='experiment',
-                                             table='SetupConfigurationArena.Models',
-                                             fields=['path'],
-                                             key={'setup_conf_idx': setup_conf_idx,
-                                                  'target': 'bodyparts'})[0]
         self.arena_size = self.Arena_params['size']
 
         self.screen_pos = np.array(
@@ -164,24 +145,17 @@ class OpenField(Behavior, dj.Manual):
         """Initialize the DeepLabCut (DLC) object for pose estimation."""
         if self.interface.camera is None:
             raise ValueError("Camera is not initialized")
-        self.dlcCorners = DLCCornerDetector(frame_queue=self.interface.camera.process_queue,
-                                            model_path=self.dlc_corners_path,
-                                            arena_size=self.arena_size,
-                                            result=self.corners_dict,
-                                            logger=self.logger
-                                            )
-        self.dlcCorners.dlc_process.join(timeout=60)
-        if self.dlcCorners.dlc_process.is_alive():
-            raise Exception("Cannot find DLC corners!!")
-        self.dlcCorners.dlc_process.close()
-        self.affine_matrix = self.corners_dict["affine_matrix"]
-        self.corners = self.corners_dict["corners"]
-
+        corners, affine_matrix = self.get_corners()
+        dlc_body_path = self.logger.get(schema='experiment',
+                                               table='SetupConfigurationArena.Models',
+                                               fields=['path'],
+                                               key={'setup_conf_idx': self.exp.params['setup_conf_idx'],
+                                                    'target': 'bodyparts'})[0]
         self.dlc = DLCContinuousPoseEstimator(frame_queue=self.interface.camera.process_queue,
-                                              model_path=self.dlc_body_path,
+                                              model_path=dlc_body_path,
                                               logger=self.logger,
                                               shared_memory_conf=self.shared_memory_conf,
-                                              affine_matrix=self.affine_matrix,
+                                              affine_matrix=affine_matrix,
                                               wait_for_setup=True)
 
     def prepare(self, condition: Dict) -> None:
@@ -384,9 +358,27 @@ class OpenField(Behavior, dj.Manual):
 
         return locs
 
+    def get_corners(self):
+        corners_dict: Dict = self.manager.dict()
+        dlc_corners_path = self.logger.get(schema='experiment',
+                                           table='SetupConfigurationArena.Models',
+                                           fields=['path'],
+                                           key={'setup_conf_idx': self.exp.params['setup_conf_idx'],
+                                                'target': 'corners'})[0]
+        dlcCorners = DLCCornerDetector(frame_queue=self.interface.camera.process_queue,
+                                       model_path=dlc_corners_path,
+                                       arena_size=self.arena_size,
+                                       result=corners_dict,
+                                       logger=self.logger)
+        # wait 60 secs to find the corners
+        dlcCorners.dlc_process.join(timeout=60)
+        if dlcCorners.dlc_process.is_alive():
+            raise Exception("Cannot find DLC corners!!")
+        dlcCorners.dlc_process.close()
+        return corners_dict["corners"], corners_dict["affine_matrix"]
+
     def stop(self):
         """Stop the camera recording"""
-        # self.interface.camera.release()
         self.stop_calls += 1
         print("interface release")
         self.interface.release()
@@ -413,6 +405,9 @@ class OpenField(Behavior, dj.Manual):
         self.interface.cleanup()
 
 
+# TODO: Those tables should be connected we both ConfigurationArena and the according table
+# for example ConfigurationArena.Port should also be connected with behavior.Configuration.Port
+# for simplicity we keep it like this but there is a case of missmatch between tables
 @behavior.schema
 class ConfigurationArena(dj.Manual):
     definition = """
