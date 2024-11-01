@@ -107,7 +107,6 @@ class OpenField(Behavior, dj.Manual):
         self.x_cur: Optional[float] = None
         self.y_cur: Optional[float] = None
         self.angle_cur: Optional[float] = None
-        self.stop_calls = 0
 
     def setup(self, exp) -> None:
         """
@@ -118,7 +117,6 @@ class OpenField(Behavior, dj.Manual):
         """
         super().setup(exp)
         self.logger.log_setup_confs(self.conf_tables)
-        self.stop_calls = 0
         setup_conf_idx = exp.params['setup_conf_idx']
         self.Arena_params = self.logger.get(schema='experiment',
                                             table='SetupConfigurationArena',
@@ -379,7 +377,6 @@ class OpenField(Behavior, dj.Manual):
 
     def stop(self):
         """Stop the camera recording"""
-        self.stop_calls += 1
         print("interface release")
         self.interface.release()
         print("dlc close")
@@ -400,8 +397,7 @@ class OpenField(Behavior, dj.Manual):
     def exit(self) -> None:
         """Clean up resources and exit"""
         super().exit()
-        if self.stop_calls == 0:
-            self.stop()
+        self.stop()
         self.interface.cleanup()
 
 

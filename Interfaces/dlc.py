@@ -158,15 +158,12 @@ class DLCProcessor(ABC):
 
     def stop(self):
         """Stop the DLC processing."""
-        self.stop_signal.set()
         if not self.dlc_process.is_alive():
-            print("dlc_process is not alive")
             return
+        self.stop_signal.set()
         self.dlc_process.join(timeout=60)
-        try:
-            self.dlc_process.close()
-        except Exception as e:
-            print(f"An error occurred while closing dlc_process: {e}")
+        if self.dlc_process.is_alive():
+            print(f"Terminate dlc process")
             self.dlc_process.terminate()  # Force terminate if not stopping.
 
 
@@ -237,9 +234,6 @@ class DLCCornerDetector(DLCProcessor):
                 },
                 schema="behavior",
             )
-    # for i in range(len(obj_pos_)):
-    #     frame = cv2.circle(frame, (int(obj_pos_[i,0]),int(obj_pos_[i,1])), radius=90, color=(0, 255, 255), thickness=3)
-    #     cv2.imwrite("test.jpeg", self.frame)
 
     @staticmethod
     def _calculate_perspective_transform(corners: np.ndarray, screen_size: float) -> Tuple[np.ndarray, np.ndarray]:
@@ -545,5 +539,9 @@ class DLCContinuousPoseEstimator(DLCProcessor):
         try:
             super().stop()
         finally:
-            self.shared_memory.close()
-            self.shared_memory.unlink()
+            if hasattr(self, 'shared_memory') and self.shared_memory is not None:
+                self.shared_memory.close()
+                try:
+                    self.shared_memory.unlink()
+                except FileNotFoundError:
+                    print("Shared memory already unlinked or does not exist.")
