@@ -119,19 +119,18 @@ class DLCProcessor(ABC):
         """Common method to process frames using the model."""
         try:
             while not self.finish_signal.is_set():
-                start_t = time.time()
-                latest_frame = None
+                self.latest_frame = None
                 latest_timestamp = None
                 # Drain the queue, keeping only the latest frame
                 while not self.frame_queue.empty():
                     # print(' multiprocessing.Queue, try to use qsize() ', self.frame_queue.qsize())
                     try:
-                        latest_timestamp, latest_frame = self.frame_queue.get_nowait()
+                        latest_timestamp, self.latest_frame = self.frame_queue.get_nowait()
                     except Empty:
                         break  # Queue became empty while we were draining it
 
-                if latest_frame is not None:
-                    pose = self.model.get_pose(latest_frame)
+                if self.latest_frame is not None:
+                    pose = self.model.get_pose(self.latest_frame)
                     self._process_frame(pose, latest_timestamp)
                     # print("time ", time.time()-start_t)
                 else:
@@ -222,6 +221,11 @@ class DLCCornerDetector(DLCProcessor):
             "affine_matrix": self.affine_matrix,
             "affine_matrix_inv": self.affine_matrix_inv,
         })
+        for corner in self.corners:
+            self.latest_frame = cv2.circle(self.latest_frame,
+                                           (int(corner[0]),int(corner[1])),
+                                           radius=5, color=(0, 0, 255), thickness=-1)  
+        cv2.imwrite(f"corners_check.jpg", self.latest_frame)
 
         if self.logger:
             # db log
