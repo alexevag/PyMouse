@@ -81,14 +81,10 @@ class OpenField(Behavior, dj.Manual):
         self.manager = mp.Manager()
 
         # Create shared memory array for pose
-        self.pose, self.sm = shared_memory_array(
-            name="pose",
-            rows_len=self.SHARED_MEMORY_SHAPE[0],
-            columns_len=self.SHARED_MEMORY_SHAPE[1],
-        )
-        self.shared_memory_conf: Dict = {"name": "pose",
-                                         "shape": self.SHARED_MEMORY_SHAPE,
-                                         "dtype": np.float32}
+        self.pose, self.sm, self.shm_conf = shared_memory_array(name="pose",
+                                                                rows_len=self.SHARED_MEMORY_SHAPE[0],
+                                                                columns_len=self.SHARED_MEMORY_SHAPE[1],
+                                                                )
 
         self.response_locs: List[Tuple[float, float]] = []
         self._responded_loc: Tuple[float, float] = []
@@ -152,7 +148,7 @@ class OpenField(Behavior, dj.Manual):
         self.dlc = DLCContinuousPoseEstimator(frame_queue=self.interface.camera.process_queue,
                                               model_path=dlc_body_path,
                                               logger=self.logger,
-                                              shared_memory_conf=self.shared_memory_conf,
+                                              shared_memory_conf=self.shm_conf,
                                               affine_matrix=affine_matrix,
                                               wait_for_setup=True)
 

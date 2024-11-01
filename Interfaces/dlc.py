@@ -292,7 +292,7 @@ class DLCContinuousPoseEstimator(DLCProcessor):
         self.rotation_angle = self._calculate_rotation_angle(side=1, base=0.8)
         # attach another shared memory block
         self.logger = logger
-        self.result, self.shared_memory = shared_memory_array(name=shared_memory_conf['name'],
+        self.result, self.shared_memory, _ = shared_memory_array(name=shared_memory_conf['name'],
                                                               rows_len=shared_memory_conf['shape'][0],
                                                               columns_len=shared_memory_conf['shape'][1],
                                                               )

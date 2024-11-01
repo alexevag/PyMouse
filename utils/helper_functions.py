@@ -248,6 +248,7 @@ def shared_memory_array(name: str, rows_len: int, columns_len: int, dtype: str =
     Returns:
         tuple(numpy.ndarray, multiprocessing.shared_memory.SharedMemory): 
         Shared memory array and SharedMemory object.
+        dict with all the informations about the shared memory
     """
     try:
         dtype_obj = np.dtype(dtype)
@@ -265,8 +266,11 @@ def shared_memory_array(name: str, rows_len: int, columns_len: int, dtype: str =
     # Create a numpy array that uses the shared memory
     shared_array = np.ndarray((rows_len, columns_len), dtype=dtype_obj, buffer=sm.buf)
     shared_array.fill(0)
+    conf: Dict = {"name": "pose",
+                  "shape": (rows_len, columns_len),
+                  "dtype": dtype_obj}
 
-    return shared_array, sm
+    return shared_array, sm, conf
 
 
 def get_display_width_height(size: float, aspect_ratio: float) -> Tuple[float, float]:
