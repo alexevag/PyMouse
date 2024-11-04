@@ -16,6 +16,7 @@ from pathlib import Path
 from queue import Queue
 from threading import Condition, Lock, Thread
 from typing import Any, List, Optional, Tuple, Union
+from queue import Empty, Full
 
 import numpy as np
 
@@ -106,7 +107,7 @@ class Camera(ABC):
 
         self.post_process = mp.Event()
         self.post_process.clear()
-        self.process_queue = mp.Queue(maxsize=2)
+        self.process_queue = mp.Queue(maxsize=30)
         self.process_queue.cancel_join_thread()
 
         self.stop = mp.Event()
@@ -549,10 +550,10 @@ class WebCam(Camera):
             # Check if a separate process queue is provided
             if self.process_queue is not False:
                 # Ensure the process queue doesn't exceed its maximum size
-                if self.process_queue.full():
-                    pass
-                else:
+                try:
                     self.process_queue.put_nowait((tmst, image))
+                except Full:
+                    pass
 
         self.camera.release()
         self.recording.clear()

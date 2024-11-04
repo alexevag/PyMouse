@@ -122,14 +122,21 @@ class DLCProcessor(ABC):
                 self.latest_frame = None
                 latest_timestamp = None
                 # Drain the queue, keeping only the latest frame
-                while not self.frame_queue.empty():
-                    # print(' multiprocessing.Queue, try to use qsize() ', self.frame_queue.qsize())
+                ask_frame = time.time()
+                while self.frame_queue.qsize()>0:
                     try:
                         latest_timestamp, self.latest_frame = self.frame_queue.get_nowait()
                     except Empty:
-                        break  # Queue became empty while we were draining it
-
+                        if self.frame_queue.qsize()==0:
+                            break  # Queue became empty while we were draining it
+                delay_time = time.time() - ask_frame    
                 if self.latest_frame is not None:
+                    frame_tranfer_delay = self.logger.logger_timer.elapsed_time()-latest_timestamp
+                    if frame_tranfer_delay>100:
+                        print(f"########################################## frame transfer delay: {frame_tranfer_delay} ms")
+                    # print('exception qsize', self.frame_queue.qsize(), self.frame_queue.empty())
+                    if delay_time>0.01:
+                        print(f"------------------------------------------ DLC queue empty delay: {delay_time} sec")
                     pose = self.model.get_pose(self.latest_frame)
                     self._process_frame(pose, latest_timestamp)
                     # print("time ", time.time()-start_t)
