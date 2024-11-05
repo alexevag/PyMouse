@@ -21,6 +21,11 @@ class Condition(dj.Manual):
         stair_down=0.55             : float
         noresponse_intertrial=1     : tinyint(1)
         incremental_punishment=1    : tinyint(1)
+        hydrate_delay=0             : int # delay hydration in minutes
+        next_up=0                   : tinyint
+        next_down=0                 : tinyint
+        metric='accuracy'           : enum('accuracy','dprime') 
+        antibias=1                  : tinyint(1)
 
         init_ready                  : int
         trial_ready                 : int
