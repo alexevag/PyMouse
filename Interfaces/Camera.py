@@ -13,10 +13,9 @@ from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from multiprocessing import Pool
 from pathlib import Path
-from queue import Queue
+from queue import Empty, Full, Queue
 from threading import Condition, Lock, Thread
 from typing import Any, List, Optional, Tuple, Union
-from queue import Empty, Full
 
 import numpy as np
 
@@ -420,7 +419,7 @@ class WebCam(Camera):
             self.tmst_type = "h5"
             self.dataset = self.logger.createDataset(
                 dataset_name="frame_tmst",
-                dataset_type=np.dtype([("txt", np.double)]),
+                dataset_type=np.dtype([("timestamp", np.double)]),
                 filename=self.filename_tmst,
                 log=False,
             )
