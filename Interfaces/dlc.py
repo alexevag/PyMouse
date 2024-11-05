@@ -123,19 +123,19 @@ class DLCProcessor(ABC):
                 latest_timestamp = None
                 # Drain the queue, keeping only the latest frame
                 ask_frame = time.time()
-                while self.frame_queue.qsize()>0:
+                while self.frame_queue.qsize() > 0:
                     try:
                         latest_timestamp, self.latest_frame = self.frame_queue.get_nowait()
                     except Empty:
-                        if self.frame_queue.qsize()==0:
+                        if self.frame_queue.qsize() == 0:
                             break  # Queue became empty while we were draining it
-                delay_time = time.time() - ask_frame    
+                delay_time = time.time() - ask_frame
                 if self.latest_frame is not None:
                     frame_tranfer_delay = self.logger.logger_timer.elapsed_time()-latest_timestamp
-                    if frame_tranfer_delay>100:
-                        print(f"########################################## frame transfer delay: {frame_tranfer_delay} ms")
+                    if frame_tranfer_delay > 100:
+                        print(f"###############################frame transfer delay: {frame_tranfer_delay} ms")
                     # print('exception qsize', self.frame_queue.qsize(), self.frame_queue.empty())
-                    if delay_time>0.01:
+                    if delay_time > 0.01:
                         print(f"------------------------------------------ DLC queue empty delay: {delay_time} sec")
                     pose = self.model.get_pose(self.latest_frame)
                     self._process_frame(pose, latest_timestamp)
@@ -169,7 +169,7 @@ class DLCProcessor(ABC):
         self.stop_signal.set()
         self.dlc_process.join(timeout=60)
         if self.dlc_process.is_alive():
-            print(f"Terminate dlc process")
+            print("Terminate dlc process")
             self.dlc_process.terminate()  # Force terminate if not stopping.
 
 
@@ -230,9 +230,9 @@ class DLCCornerDetector(DLCProcessor):
         })
         for corner in self.corners:
             self.latest_frame = cv2.circle(self.latest_frame,
-                                           (int(corner[0]),int(corner[1])),
-                                           radius=5, color=(0, 0, 255), thickness=-1)  
-        cv2.imwrite(f"corners_check.jpg", self.latest_frame)
+                                           (int(corner[0]), int(corner[1])),
+                                           radius=5, color=(0, 0, 255), thickness=-1)
+        cv2.imwrite("corners_check.jpg", self.latest_frame)
 
         if self.logger:
             # db log
@@ -300,9 +300,9 @@ class DLCContinuousPoseEstimator(DLCProcessor):
         # attach another shared memory block
         self.logger = logger
         self.result, self.shared_memory, _ = shared_memory_array(name=shared_memory_conf['name'],
-                                                              rows_len=shared_memory_conf['shape'][0],
-                                                              columns_len=shared_memory_conf['shape'][1],
-                                                              )
+                                                                 rows_len=shared_memory_conf['shape'][0],
+                                                                 columns_len=shared_memory_conf['shape'][1],
+                                                                 )
         if self.logger:
             folder = (f"Recordings/{self.logger.trial_key['animal_id']}"
                       f"_{self.logger.trial_key['session']}/")
