@@ -369,6 +369,21 @@ class OpenField(Behavior, dj.Manual):
         if dlcCorners.dlc_process.is_alive():
             raise Exception("Cannot find DLC corners!!")
         dlcCorners.dlc_process.close()
+
+        # save the corners in table ConfigurationArena.Corners
+        key = self.logger.get(table='ConfigurationArena',
+                        schema='behavior',
+                        key=self.logger.trial_key,
+                        as_dict=True)[0]
+        self.logger.put(
+            table="ConfigurationArena.Corners",
+            tuple={
+                "affine_matrix": corners_dict["affine_matrix"],
+                "corners": corners_dict["corners"],
+                **key,},
+            priority=5,
+            schema="behavior",
+        )
         return corners_dict["corners"], corners_dict["affine_matrix"]
 
     def stop(self):

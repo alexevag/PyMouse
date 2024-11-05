@@ -234,17 +234,6 @@ class DLCCornerDetector(DLCProcessor):
                                            radius=5, color=(0, 0, 255), thickness=-1)
         cv2.imwrite("corners_check.jpg", self.latest_frame)
 
-        if self.logger:
-            # db log
-            self.logger.put(
-                table="behavior.ConfigurationArena.Corners",
-                tuple={
-                    "affine_matrix": self.affine_matrix,
-                    "corners": self.corners,
-                    **self.logger.trial_key,
-                },
-                schema="behavior",
-            )
 
     @staticmethod
     def _calculate_perspective_transform(corners: np.ndarray, screen_size: float) -> Tuple[np.ndarray, np.ndarray]:
