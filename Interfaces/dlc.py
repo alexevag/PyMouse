@@ -237,7 +237,7 @@ class DLCCornerDetector(DLCProcessor):
         if self.logger:
             # db log
             self.logger.put(
-                table="Configuration.Arena",
+                table="behavior.ConfigurationArena.Corners",
                 tuple={
                     "affine_matrix": self.affine_matrix,
                     "corners": self.corners,
