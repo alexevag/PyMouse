@@ -82,7 +82,7 @@ class RPPorts(Interface):
 
     def opto_stim(self, duration, dutycycle):
         # self.thread.submit(self.__pwd_out, self.channels['Opto'], duration, dutycycle)
-        self.thread.submit(self.__pulse_out, self.channels['Opto'], duration, 100, 20)
+        self.thread.submit(self.__pulse_out, self.channels['Opto'], duration, dutycycle, 20)
 
     def opto_stim_stop(self):
         self.Pulser.wave_tx_stop()
