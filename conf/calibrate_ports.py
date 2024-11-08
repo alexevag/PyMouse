@@ -1,7 +1,6 @@
 global logger
 from Experiments.Calibrate import *
 
-
 # define calibration parameters
 session_params = {
     'duration'        : [20, 30, 40, 150],
@@ -9,7 +8,7 @@ session_params = {
     'pulsenum'        : [600, 300, 200, 100],
     'pulse_interval'  : [40, 40, 40, 40],
     'save'            : True,
-    'setup_conf_idx'  : 1,
+    'setup_conf_idx'  : 0,
 }
 
 # run experiment

@@ -64,8 +64,9 @@ class Experiment:
         self.interface = interface(exp=self, callbacks=False)
 
         pygame.init()
-        self.surface = pygame.display.set_mode((800, 480))
+        self.screen = pygame.display.set_mode((800, 480))
         if self.logger.is_pi:
+            self.props.setFullscreen(self.Fullscreen)
             self.screen = pygame.display.set_mode(
                 (self.screen_width, self.screen_height), pygame.FULLSCREEN
             )
@@ -113,7 +114,7 @@ class Experiment:
 
             if self.menu.is_enabled():
                 self.menu.update(events)
-                self.menu.draw(self.surface)
+                self.menu.draw(self.screen
 
             pygame.display.flip()
 
