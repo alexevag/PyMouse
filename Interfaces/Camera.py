@@ -86,11 +86,11 @@ class Camera(ABC):
 
         self.source_path = (
             self._check_json_config("video_source_path", conf)
-            + f"/{self.filename}/"
+            + f"{self.filename}/"
         )
         self.target_path = (
             self._check_json_config("video_target_path", conf)
-            + f"/{self.filename}/"
+            + f"{self.filename}/"
         )
 
         try:
@@ -129,6 +129,7 @@ class Camera(ABC):
                     filename=self.filename + ".mp4",
                     source_path=self.source_path,
                     target_path=self.target_path,
+                    block=True,
                 )
             )
             h5s_filename = (
@@ -144,6 +145,7 @@ class Camera(ABC):
                     filename=self.filename_tmst,
                     source_path=self.source_path,
                     target_path=self.target_path,
+                    block=True,
                 )
             )
 

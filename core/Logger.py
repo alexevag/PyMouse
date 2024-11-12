@@ -1021,7 +1021,7 @@ class Logger:
 
         return self.datasets[filename]
 
-    def log_recording(self, rec_key: Dict[str, any]):
+    def log_recording(self, rec_key: Dict[str, any], **kwargs):
         """
         Logs a new recording entry with an incremented recording index.
 
@@ -1040,7 +1040,7 @@ class Logger:
             fields=["rec_idx"],
         )
         rec_idx = 1 if not recs else max(recs) + 1
-        self.log('Recording', data={**rec_key, 'rec_idx': rec_idx}, schema='recording')
+        self.log('Recording', data={**rec_key, 'rec_idx': rec_idx}, schema='recording', **kwargs)
 
     def closeDatasets(self):
         """

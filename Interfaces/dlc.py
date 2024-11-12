@@ -309,6 +309,7 @@ class DLCContinuousPoseEstimator(DLCProcessor):
                     filename=self.filename_dlc,
                     source_path=self.source_path,
                     target_path=self.target_path,
+                    block=True,
                 )
             )
         super().__init__(frame_queue, model_path, logger, wait_for_setup)
