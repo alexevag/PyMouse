@@ -129,8 +129,8 @@ class Camera(ABC):
                     filename=self.filename + ".mp4",
                     source_path=self.source_path,
                     target_path=self.target_path,
-                    block=True,
-                )
+                ),
+                block=True,
             )
             h5s_filename = (
                 f"animal_id_{logger.trial_key['animal_id']}"
@@ -145,8 +145,8 @@ class Camera(ABC):
                     filename=self.filename_tmst,
                     source_path=self.source_path,
                     target_path=self.target_path,
-                    block=True,
-                )
+                ),
+                block=True,
             )
 
         self.camera_process = mp.Process(target=self.start_rec)
