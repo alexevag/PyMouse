@@ -104,8 +104,6 @@ class Experiment:
         """
         Calibration mainloop.
         """
-
-        # self.menu.mainloop(self.surface, disable_loop=test)
         while self.stop == False:
             events = pygame.event.get()
             for event in events:
@@ -114,7 +112,7 @@ class Experiment:
 
             if self.menu.is_enabled():
                 self.menu.update(events)
-                self.menu.draw(self.screen
+                self.menu.draw(self.screen)
 
             pygame.display.flip()
 
