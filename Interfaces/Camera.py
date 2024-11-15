@@ -398,7 +398,12 @@ class WebCam(Camera):
                 "You can install cv2 using pip:\n"
                 'sudo pip3 install opencv-python"'
             )
-
+        self.camera = cv2.VideoCapture(0, cv2.CAP_V4L2)
+        if not self.camera.isOpened():
+            raise RuntimeError(
+                "No camera is available. Please check if the camera is connected and functional."
+            )
+        self.camera.release()
         super().__init__(kwargs["filename"], kwargs["logger"], kwargs["video_aim"])
 
     def setup(self):
