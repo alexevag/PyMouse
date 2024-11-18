@@ -112,7 +112,7 @@ class DLCProcessor(ABC):
 
     def _setup_model(self):
         """Initialize the DLC model."""
-        _, frame = self.frame_queue.get_nowait()
+        _, frame = self.frame_queue.get(timeout=30)
         self.model.setup_model(frame)
 
     def process_frames(self):
