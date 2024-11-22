@@ -372,15 +372,15 @@ class OpenField(Behavior, dj.Manual):
 
         # save the corners in table ConfigurationArena.Corners
         key = self.logger.get(table='ConfigurationArena',
-                        schema='behavior',
-                        key=self.logger.trial_key,
-                        as_dict=True)[0]
+                              schema='behavior',
+                              key=self.logger.trial_key,
+                              as_dict=True)[0]
         self.logger.put(
             table="ConfigurationArena.Corners",
             tuple={
                 "affine_matrix": corners_dict["affine_matrix"],
                 "corners": corners_dict["corners"],
-                **key,},
+                **key},
             priority=5,
             schema="behavior",
         )
