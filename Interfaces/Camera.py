@@ -317,7 +317,7 @@ class Camera(ABC):
             key (str): The key to check.
         """
         if not conf.get(key, False):
-            raise ValueError(f"{key} is not provided in the dj_local_conf.json.")
+            raise ValueError(f"{key} is not provided in the local_conf.json.")
         else:
             return conf[key]
 
@@ -503,7 +503,7 @@ class WebCam(Camera):
         self.res_set = self.set_resolution(self.resolution_x, self.resolution_y)
         if not self.res_set:
             logging.warning(f"Camera resolution cannot be set tp {(self.resolution_x, self.resolution_y)}"
-                f",resize of frames will be used!!")
+                            f",resize of frames will be used!!")
         if self.exposure:
             self.camera.set(cv2.CAP_PROP_AUTO_EXPOSURE, 1)  # Disable auto exposure
             self._set_camera_property(cv2.CAP_PROP_EXPOSURE, self.exposure)
