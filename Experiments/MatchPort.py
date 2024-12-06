@@ -105,8 +105,8 @@ class Trial(Experiment):
         if self.beh.is_ready(self.stim.curr_cond['trial_ready'], self.start_time) and not self.resp_ready:
             self.resp_ready = True
             self.stim.ready_stim()
-        if self.beh.is_off_proximity():
-            self.stim.stop()
+        # if self.beh.is_off_proximity():
+        #     self.stim.stop()
 
     def next(self):
         if not self.resp_ready and self.beh.is_off_proximity():  # did not wait
