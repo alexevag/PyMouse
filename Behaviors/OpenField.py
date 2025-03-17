@@ -6,6 +6,7 @@ import datajoint as dj
 import numpy as np
 
 from core.Behavior import Behavior, BehCondition, behavior
+from core.Logger import interface
 from Interfaces.dlc import DLCContinuousPoseEstimator, DLCCornerDetector
 from utils.helper_functions import shared_memory_array
 
@@ -65,10 +66,10 @@ class OpenField(Behavior, dj.Manual):
         "OpenField.Reward",
     ]
 
-    conf_tables = {"behavior.ConfigurationArena": "experiment.SetupConfigurationArena",
-                   "behavior.ConfigurationArena.Port": "experiment.SetupConfigurationArena.Port",
-                   "behavior.ConfigurationArena.Screen": "experiment.SetupConfigurationArena.Screen",
-                   "behavior.ConfigurationArena.Models": "experiment.SetupConfigurationArena.Models"}
+    conf_tables = {"interface.ConfigurationArena": "interface.SetupConfigurationArena",
+                   "interface.ConfigurationArena.Port": "interface.SetupConfigurationArena.Port",
+                   "interface.ConfigurationArena.Screen": "interface.SetupConfigurationArena.Screen",
+                   "interface.ConfigurationArena.Models": "interface.SetupConfigurationArena.Models"}
 
     required_fields = ["reward_loc_x", "reward_amount"]
     default_key = {"reward_type": "water", "response_port": 1, "reward_port": 1}
@@ -114,13 +115,13 @@ class OpenField(Behavior, dj.Manual):
         super().setup(exp)
         self.logger.log_setup_confs(self.conf_tables)
         setup_conf_idx = exp.params['setup_conf_idx']
-        self.Arena_params = self.logger.get(schema='experiment',
+        self.Arena_params = self.logger.get(schema='interface',
                                             table='SetupConfigurationArena',
                                             key={'setup_conf_idx': setup_conf_idx},
                                             as_dict=True
                                             )[0]
 
-        self.Arena_Screens_pos = self.logger.get(schema='experiment',
+        self.Arena_Screens_pos = self.logger.get(schema='interface',
                                                  table='SetupConfigurationArena.Screen',
                                                  key={'setup_conf_idx': setup_conf_idx},
                                                  as_dict=True,
@@ -140,7 +141,7 @@ class OpenField(Behavior, dj.Manual):
         if self.interface.camera is None:
             raise ValueError("Camera is not initialized")
         corners, affine_matrix = self.get_corners()
-        dlc_body_path = self.logger.get(schema='experiment',
+        dlc_body_path = self.logger.get(schema='interface',
                                                table='SetupConfigurationArena.Models',
                                                fields=['path'],
                                                key={'setup_conf_idx': self.exp.params['setup_conf_idx'],
@@ -354,7 +355,7 @@ class OpenField(Behavior, dj.Manual):
 
     def get_corners(self):
         corners_dict: Dict = self.manager.dict()
-        dlc_corners_path = self.logger.get(schema='experiment',
+        dlc_corners_path = self.logger.get(schema='interface',
                                            table='SetupConfigurationArena.Models',
                                            fields=['path'],
                                            key={'setup_conf_idx': self.exp.params['setup_conf_idx'],
@@ -372,17 +373,17 @@ class OpenField(Behavior, dj.Manual):
 
         # save the corners in table ConfigurationArena.Corners
         key = self.logger.get(table='ConfigurationArena',
-                              schema='behavior',
+                              schema='interface',
                               key=self.logger.trial_key,
                               as_dict=True)[0]
         self.logger.put(
+            schema='interface',
             table="ConfigurationArena.Corners",
             tuple={
                 "affine_matrix": corners_dict["affine_matrix"],
                 "corners": corners_dict["corners"],
                 **key},
             priority=5,
-            schema="behavior",
         )
         return corners_dict["corners"], corners_dict["affine_matrix"]
 
@@ -415,7 +416,7 @@ class OpenField(Behavior, dj.Manual):
 # TODO: Those tables should be connected we both ConfigurationArena and the according table
 # for example ConfigurationArena.Port should also be connected with behavior.Configuration.Port
 # for simplicity we keep it like this but there is a case of missmatch between tables
-@behavior.schema
+@interface.schema
 class ConfigurationArena(dj.Manual):
     definition = """
     # Camera information

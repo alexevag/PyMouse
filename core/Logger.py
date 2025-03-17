@@ -728,10 +728,10 @@ class Logger:
             if len(source_tables) > 1:
                 source_tables[0] = source_tables[0]+".proj()"
                 t = ((eval(" * ".join(source_tables)) & f"setup_conf_idx={self.setup_conf_idx}")
-                     * (behavior.Configuration() & self.trial_key))
+                     * (interface.Configuration() & self.trial_key))
             else:
                 t = ((eval(" * ".join(source_tables))() & f"setup_conf_idx={self.setup_conf_idx}")
-                     * (behavior.Configuration() & self.trial_key))
+                     * (interface.Configuration() & self.trial_key))
 
             dict_ins = (t).fetch(as_dict=True)
             if len(dict_ins) == 0:
