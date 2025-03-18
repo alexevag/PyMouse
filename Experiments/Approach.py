@@ -3,6 +3,7 @@ import time
 import datajoint as dj
 
 from core.Experiment import ExperimentClass, State, experiment
+from core.Logger import interface
 
 
 @experiment.schema
@@ -263,11 +264,11 @@ class Exit(Experiment):
         self.stop()
 
 
-@experiment.schema
+@interface.schema
 class SetupConfigurationArena(dj.Lookup, dj.Manual):
     definition = """
     # Camera information
-    -> experiment.SetupConfiguration
+    -> interface.SetupConfiguration
     arena_idx                : tinyint
     ---
     size                      : int
